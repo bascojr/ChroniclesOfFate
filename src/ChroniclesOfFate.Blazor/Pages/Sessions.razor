@@ -89,53 +89,66 @@
                 }
                 else
                 {
-                    <div class="storybook-grid">
-                        @foreach (var book in availableStorybooks)
-                        {
-                            bool isSelected = selectedStorybookIds.Contains(book.Id);
-                            <div class="storybook-card @(isSelected ? "selected" : "")"
-                                 @onclick="() => ToggleStorybook(book.Id)">
-                                <div class="storybook-header">
-                                    <span class="storybook-name">@book.Name</span>
-                                    <span class="theme-badge">@book.Theme</span>
+                    <div class="storybook-selection-container">
+                        <div class="storybook-grid">
+                            @foreach (var book in availableStorybooks)
+                            {
+                                bool isSelected = selectedStorybookIds.Contains(book.Id);
+                                <div class="storybook-card @(isSelected ? "selected" : "") @(hoveredStorybook?.Id == book.Id ? "hovered" : "")"
+                                     @onclick="() => ToggleStorybook(book.Id)"
+                                     @onmouseenter="() => hoveredStorybook = book"
+                                     @onmouseleave="() => hoveredStorybook = null">
+                                    <div class="storybook-header">
+                                        <span class="storybook-name">@book.Name</span>
+                                        <span class="theme-badge">@book.Theme</span>
+                                    </div>
+                                    <p class="storybook-desc">@book.Description</p>
+                                    <div class="storybook-bonuses">
+                                        @if (book.StrengthBonus > 0) { <span class="bonus">+@book.StrengthBonus STR</span> }
+                                        @if (book.AgilityBonus > 0) { <span class="bonus">+@book.AgilityBonus AGI</span> }
+                                        @if (book.IntelligenceBonus > 0) { <span class="bonus">+@book.IntelligenceBonus INT</span> }
+                                        @if (book.EnduranceBonus > 0) { <span class="bonus">+@book.EnduranceBonus END</span> }
+                                        @if (book.CharismaBonus > 0) { <span class="bonus">+@book.CharismaBonus CHA</span> }
+                                        @if (book.LuckBonus > 0) { <span class="bonus">+@book.LuckBonus LCK</span> }
+                                    </div>
+                                    <div class="storybook-event">📖 @book.Events.Count events</div>
                                 </div>
-                                <p class="storybook-desc">@book.Description</p>
-                                <div class="storybook-bonuses">
-                                    @if (book.StrengthBonus > 0) { <span class="bonus">+@book.StrengthBonus STR</span> }
-                                    @if (book.AgilityBonus > 0) { <span class="bonus">+@book.AgilityBonus AGI</span> }
-                                    @if (book.IntelligenceBonus > 0) { <span class="bonus">+@book.IntelligenceBonus INT</span> }
-                                    @if (book.EnduranceBonus > 0) { <span class="bonus">+@book.EnduranceBonus END</span> }
-                                    @if (book.CharismaBonus > 0) { <span class="bonus">+@book.CharismaBonus CHA</span> }
-                                    @if (book.LuckBonus > 0) { <span class="bonus">+@book.LuckBonus LCK</span> }
-                                </div>
-                                <div class="storybook-event">📖 @book.Events.Count events</div>
+                            }
+                        </div>
 
-                                <div class="storybook-tooltip">
-                                    <h4>@book.Name</h4>
-                                    <p class="tooltip-desc">@book.Description</p>
-                                    <div class="tooltip-stats">
-                                        <strong>Stat Bonuses:</strong>
-                                        <div class="tooltip-bonuses">
-                                            @if (book.StrengthBonus > 0) { <span>+@book.StrengthBonus STR</span> }
-                                            @if (book.AgilityBonus > 0) { <span>+@book.AgilityBonus AGI</span> }
-                                            @if (book.IntelligenceBonus > 0) { <span>+@book.IntelligenceBonus INT</span> }
-                                            @if (book.EnduranceBonus > 0) { <span>+@book.EnduranceBonus END</span> }
-                                            @if (book.CharismaBonus > 0) { <span>+@book.CharismaBonus CHA</span> }
-                                            @if (book.LuckBonus > 0) { <span>+@book.LuckBonus LCK</span> }
-                                        </div>
-                                    </div>
-                                    <div class="tooltip-events">
-                                        <strong>Events (@book.Events.Count):</strong>
-                                        <ul>
-                                            @foreach (var evt in book.Events)
-                                            {
-                                                <li class="@evt.Rarity.ToString().ToLower()">
-                                                    <span class="event-rarity">[@evt.Rarity]</span> @evt.Title
-                                                </li>
-                                            }
-                                        </ul>
+                        @if (hoveredStorybook != null)
+                        {
+                            <div class="storybook-detail-panel">
+                                <h4>@hoveredStorybook.Name</h4>
+                                <p class="tooltip-desc">@hoveredStorybook.Description</p>
+                                <div class="tooltip-stats">
+                                    <strong>Stat Bonuses:</strong>
+                                    <div class="tooltip-bonuses">
+                                        @if (hoveredStorybook.StrengthBonus > 0) { <span>+@hoveredStorybook.StrengthBonus STR</span> }
+                                        @if (hoveredStorybook.AgilityBonus > 0) { <span>+@hoveredStorybook.AgilityBonus AGI</span> }
+                                        @if (hoveredStorybook.IntelligenceBonus > 0) { <span>+@hoveredStorybook.IntelligenceBonus INT</span> }
+                                        @if (hoveredStorybook.EnduranceBonus > 0) { <span>+@hoveredStorybook.EnduranceBonus END</span> }
+                                        @if (hoveredStorybook.CharismaBonus > 0) { <span>+@hoveredStorybook.CharismaBonus CHA</span> }
+                                        @if (hoveredStorybook.LuckBonus > 0) { <span>+@hoveredStorybook.LuckBonus LCK</span> }
                                     </div>
                                 </div>
+                                <div class="tooltip-events">
+                                    <strong>Events (@hoveredStorybook.Events.Count):</strong>
+                                    <ul>
+                                        @foreach (var evt in hoveredStorybook.Events)
+                                        {
+                                            <li class="@evt.Rarity.ToString().ToLower()">
+                                                <span class="event-rarity">[@evt.Rarity]</span> @evt.Title
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="storybook-detail-panel empty">
+                                <p>Hover over a storybook to see details</p>
                             </div>
                         }
                     </div>
@@ -166,6 +179,7 @@
     private List<StorybookDto> availableStorybooks = new();
     private List<int> selectedStorybookIds = new();
     private bool isLoadingStorybooks = false;
+    private StorybookDto? hoveredStorybook = null;
 
     protected override async Task OnInitializedAsync()
     {

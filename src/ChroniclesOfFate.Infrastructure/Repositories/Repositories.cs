@@ -56,10 +56,12 @@ public class CharacterRepository : Repository<Character>, ICharacterRepository
     
     public async Task<Character?> GetWithStorybooksAsync(int characterId) =>
         await _dbSet.Include(c => c.EquippedStorybooks).ThenInclude(es => es.Storybook)
+            .Include(c => c.Skills).ThenInclude(cs => cs.Skill)
             .FirstOrDefaultAsync(c => c.Id == characterId);
     
     public async Task<Character?> GetWithFullDetailsAsync(int characterId) =>
         await _dbSet.Include(c => c.EquippedStorybooks).ThenInclude(es => es.Storybook)
+            .Include(c => c.Skills).ThenInclude(cs => cs.Skill)
             .Include(c => c.EventHistory).Include(c => c.BattleHistory)
             .FirstOrDefaultAsync(c => c.Id == characterId);
     
@@ -200,4 +202,53 @@ public class MessageLogEntryRepository : Repository<MessageLogEntry>, IMessageLo
             .OrderByDescending(m => m.CreatedAt)
             .Take(limit)
             .ToListAsync();
+}
+
+public class SkillRepository : Repository<Skill>, ISkillRepository
+{
+    public SkillRepository(ApplicationDbContext context) : base(context) { }
+
+    public async Task<IEnumerable<Skill>> GetByTypeAsync(SkillType skillType) =>
+        await _dbSet.Where(s => s.SkillType == skillType && s.IsActive).ToListAsync();
+
+    public async Task<IEnumerable<Skill>> GetActiveSkillsAsync() =>
+        await _dbSet.Where(s => s.IsActive).ToListAsync();
+
+    public async Task<Skill?> GetWithDetailsAsync(int skillId) =>
+        await _dbSet.FirstOrDefaultAsync(s => s.Id == skillId);
+}
+
+public class CharacterSkillRepository : Repository<CharacterSkill>, ICharacterSkillRepository
+{
+    public CharacterSkillRepository(ApplicationDbContext context) : base(context) { }
+
+    public async Task<IEnumerable<CharacterSkill>> GetByCharacterIdAsync(int characterId) =>
+        await _dbSet.Where(cs => cs.CharacterId == characterId).ToListAsync();
+
+    public async Task<IEnumerable<CharacterSkill>> GetByCharacterWithSkillsAsync(int characterId) =>
+        await _dbSet.Where(cs => cs.CharacterId == characterId)
+            .Include(cs => cs.Skill)
+            .ToListAsync();
+
+    public async Task<bool> CharacterHasSkillAsync(int characterId, int skillId) =>
+        await _dbSet.AnyAsync(cs => cs.CharacterId == characterId && cs.SkillId == skillId);
+
+    public async Task<CharacterSkill?> AddSkillToCharacterAsync(int characterId, int skillId, string? source = null, int turn = 0)
+    {
+        // Check if character already has this skill
+        if (await CharacterHasSkillAsync(characterId, skillId))
+            return null;
+
+        var characterSkill = new CharacterSkill
+        {
+            CharacterId = characterId,
+            SkillId = skillId,
+            AcquisitionSource = source,
+            AcquiredOnTurn = turn,
+            AcquiredAt = DateTime.UtcNow
+        };
+
+        await _dbSet.AddAsync(characterSkill);
+        return characterSkill;
+    }
 }

@@ -23,7 +23,8 @@ public class RandomEventService : IRandomEventService
     public async Task<RandomEventDto?> TryTriggerEventAsync(
         int characterId,
         ActionType action,
-        IEnumerable<int> equippedStorybookIds)
+        IEnumerable<int> equippedStorybookIds,
+        bool preferHigherRarity = false)
     {
         var character = await _unitOfWork.Characters.GetByIdAsync(characterId)
             ?? throw new InvalidOperationException("Character not found");
@@ -45,6 +46,15 @@ public class RandomEventService : IRandomEventService
         if (!eligibleList.Any())
             return null;
 
+        // When preferHigherRarity is true, sort events so higher rarity events are checked first
+        // and boost their trigger chances
+        if (preferHigherRarity)
+        {
+            eligibleList = eligibleList
+                .OrderByDescending(e => (int)e.Rarity)
+                .ToList();
+        }
+
         foreach (var ev in eligibleList)
         {
             double triggerChance = ev.BaseProbability;
@@ -59,6 +69,21 @@ public class RandomEventService : IRandomEventService
             }
 
             triggerChance *= (1.0 + character.Luck / 500.0);
+
+            // When preferring higher rarity, boost trigger chances based on rarity
+            if (preferHigherRarity)
+            {
+                double rarityBoost = ev.Rarity switch
+                {
+                    Rarity.Common => 1.0,
+                    Rarity.Uncommon => 1.5,
+                    Rarity.Rare => 2.0,
+                    Rarity.Epic => 2.5,
+                    Rarity.Legendary => 3.0,
+                    _ => 1.0
+                };
+                triggerChance *= rarityBoost;
+            }
 
             if (_random.RollChance(triggerChance))
             {
@@ -100,15 +125,35 @@ public class RandomEventService : IRandomEventService
             checkSucceeded = effectiveRoll >= choice.CheckDifficulty;
         }
 
+        string? grantedSkillName = null;
+
         if (checkSucceeded == false)
         {
             resultDescription = choice.FailureDescription ?? "Your attempt failed.";
             ApplyStatChanges(character, choice, false, statChanges);
+
+            // Grant failure skill if specified
+            if (choice.FailureGrantSkillId.HasValue)
+            {
+                grantedSkillName = await TryGrantSkillAsync(characterId, choice.FailureGrantSkillId.Value, randomEvent.Title, character.TotalTurns);
+            }
         }
         else
         {
             resultDescription = choice.ResultDescription;
             ApplyStatChanges(character, choice, true, statChanges);
+
+            // Grant success skill if specified
+            if (choice.GrantSkillId.HasValue)
+            {
+                grantedSkillName = await TryGrantSkillAsync(characterId, choice.GrantSkillId.Value, randomEvent.Title, character.TotalTurns);
+            }
+        }
+
+        // Append skill acquisition to result description
+        if (!string.IsNullOrEmpty(grantedSkillName))
+        {
+            resultDescription += $" You learned the skill: {grantedSkillName}!";
         }
 
         var gameEvent = new GameEvent
@@ -309,5 +354,30 @@ public class RandomEventService : IRandomEventService
         {
             return null;
         }
+    }
+
+    private async Task<string?> TryGrantSkillAsync(int characterId, int skillId, string eventTitle, int turn)
+    {
+        // Check if character already has this skill
+        if (await _unitOfWork.CharacterSkills.CharacterHasSkillAsync(characterId, skillId))
+            return null;
+
+        var skill = await _unitOfWork.Skills.GetByIdAsync(skillId);
+        if (skill == null) return null;
+
+        var characterSkill = await _unitOfWork.CharacterSkills.AddSkillToCharacterAsync(
+            characterId,
+            skillId,
+            $"Event: {eventTitle}",
+            turn
+        );
+
+        if (characterSkill != null)
+        {
+            await _unitOfWork.SaveChangesAsync();
+            return skill.Name;
+        }
+
+        return null;
     }
 }

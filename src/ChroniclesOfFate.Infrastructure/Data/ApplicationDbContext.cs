@@ -24,6 +24,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<BattleLog> BattleLogs => Set<BattleLog>();
     public DbSet<TrainingScenario> TrainingScenarios => Set<TrainingScenario>();
     public DbSet<MessageLogEntry> MessageLogEntries => Set<MessageLogEntry>();
+    public DbSet<Skill> Skills => Set<Skill>();
+    public DbSet<CharacterSkill> CharacterSkills => Set<CharacterSkill>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -131,11 +133,21 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.ResultDescription).HasMaxLength(1000);
             entity.Property(e => e.FailureDescription).HasMaxLength(1000);
             entity.Property(e => e.StatRequirements).HasMaxLength(500);
-            
+
             entity.HasOne(e => e.RandomEvent)
                 .WithMany(r => r.Choices)
                 .HasForeignKey(e => e.RandomEventId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.GrantSkill)
+                .WithMany()
+                .HasForeignKey(e => e.GrantSkillId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(e => e.FailureGrantSkill)
+                .WithMany()
+                .HasForeignKey(e => e.FailureGrantSkillId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         // GameEvent configuration
@@ -215,6 +227,37 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(e => new { e.GameSessionId, e.CreatedAt });
+        });
+
+        // Skill configuration
+        modelBuilder.Entity<Skill>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.IconUrl).HasMaxLength(500);
+            entity.Property(e => e.ActiveNarrative).HasMaxLength(500);
+        });
+
+        // CharacterSkill configuration
+        modelBuilder.Entity<CharacterSkill>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasOne(e => e.Character)
+                .WithMany(c => c.Skills)
+                .HasForeignKey(e => e.CharacterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Skill)
+                .WithMany(s => s.CharacterSkills)
+                .HasForeignKey(e => e.SkillId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.Property(e => e.AcquisitionSource).HasMaxLength(200);
+
+            // Ensure character can't have duplicate skills
+            entity.HasIndex(e => new { e.CharacterId, e.SkillId }).IsUnique();
         });
     }
 }

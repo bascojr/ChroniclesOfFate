@@ -28,7 +28,7 @@ public class BattleService : IBattleService
             ?? throw new InvalidOperationException("Enemy not found");
 
         // Energy check
-        const int battleEnergyCost = 30;
+        const int battleEnergyCost = 15;
         if (character.CurrentEnergy < battleEnergyCost)
         {
             return new BattleResultDto(
@@ -203,47 +203,91 @@ public class BattleService : IBattleService
     }
 
     private BattleRoundDto SimulateBattleRound(
-        Character character, 
-        Enemy enemy, 
-        ref int playerHealth, 
+        Character character,
+        Enemy enemy,
+        ref int playerHealth,
         ref int enemyHealth,
         int roundNumber)
     {
+        // Get character's skills for combat calculations
+        var skills = character.Skills?.Where(cs => cs.Skill != null).Select(cs => cs.Skill!).ToList() ?? new List<Skill>();
+
         // Determine turn order based on agility
         bool playerFirst = character.Agility + _random.Next(20) >= enemy.Agility + _random.Next(20);
 
         int playerDamage = 0, enemyDamage = 0;
         string playerAction = "", enemyAction = "";
         var narrativeParts = new List<string>();
+        int healingDone = 0;
 
         if (playerFirst)
         {
             // Player attacks first
-            (playerDamage, playerAction) = CalculatePlayerAttack(character, enemy);
+            (playerDamage, playerAction, var activeSkillNarrative) = CalculatePlayerAttackWithSkills(character, enemy, skills);
             enemyHealth -= playerDamage;
             narrativeParts.Add($"{character.Name} {playerAction} for {playerDamage} damage!");
+            if (!string.IsNullOrEmpty(activeSkillNarrative)) narrativeParts.Add(activeSkillNarrative);
+
+            // Apply life steal
+            healingDone = ApplyLifeSteal(skills, playerDamage, ref playerHealth, character.MaxHealth);
+            if (healingDone > 0) narrativeParts.Add($"Life stolen: +{healingDone} HP!");
+
+            // Apply thorns damage to enemy when they hit us (will happen after their attack)
 
             if (enemyHealth > 0)
             {
                 // Enemy counterattacks
-                (enemyDamage, enemyAction) = CalculateEnemyAttack(enemy, character);
-                playerHealth -= enemyDamage;
-                narrativeParts.Add($"{enemy.Name} {enemyAction} for {enemyDamage} damage!");
+                (enemyDamage, enemyAction) = CalculateEnemyAttackWithSkills(enemy, character, skills, ref enemyHealth);
+
+                // Check player evasion
+                if (CheckEvasion(skills, character.Agility))
+                {
+                    narrativeParts.Add($"{character.Name} dodges the attack!");
+                    enemyDamage = 0;
+                }
+                else
+                {
+                    playerHealth -= enemyDamage;
+                    narrativeParts.Add($"{enemy.Name} {enemyAction} for {enemyDamage} damage!");
+                }
             }
         }
         else
         {
             // Enemy attacks first
-            (enemyDamage, enemyAction) = CalculateEnemyAttack(enemy, character);
-            playerHealth -= enemyDamage;
-            narrativeParts.Add($"{enemy.Name} {enemyAction} for {enemyDamage} damage!");
+            (enemyDamage, enemyAction) = CalculateEnemyAttackWithSkills(enemy, character, skills, ref enemyHealth);
+
+            // Check player evasion
+            if (CheckEvasion(skills, character.Agility))
+            {
+                narrativeParts.Add($"{character.Name} dodges the incoming attack!");
+                enemyDamage = 0;
+
+                // Check for counter attack on dodge
+                if (CheckCounterAttack(skills))
+                {
+                    int counterDamage = (int)(character.Strength * 0.2) + _random.Next(5, 10);
+                    enemyHealth -= counterDamage;
+                    narrativeParts.Add($"{character.Name} counter-attacks for {counterDamage} damage!");
+                }
+            }
+            else
+            {
+                playerHealth -= enemyDamage;
+                narrativeParts.Add($"{enemy.Name} {enemyAction} for {enemyDamage} damage!");
+            }
 
             if (playerHealth > 0)
             {
                 // Player counterattacks
-                (playerDamage, playerAction) = CalculatePlayerAttack(character, enemy);
+                (playerDamage, playerAction, var activeSkillNarrative) = CalculatePlayerAttackWithSkills(character, enemy, skills);
                 enemyHealth -= playerDamage;
                 narrativeParts.Add($"{character.Name} {playerAction} for {playerDamage} damage!");
+                if (!string.IsNullOrEmpty(activeSkillNarrative)) narrativeParts.Add(activeSkillNarrative);
+
+                // Apply life steal
+                healingDone = ApplyLifeSteal(skills, playerDamage, ref playerHealth, character.MaxHealth);
+                if (healingDone > 0) narrativeParts.Add($"Life stolen: +{healingDone} HP!");
             }
         }
 
@@ -259,9 +303,63 @@ public class BattleService : IBattleService
         );
     }
 
-    private (int damage, string action) CalculatePlayerAttack(Character character, Enemy enemy)
+    private bool CheckEvasion(List<Skill> skills, int agility)
     {
-        // Base damage from primary stat based on class
+        double evasionChance = agility / 1000.0; // Base evasion from agility
+
+        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Passive && s.PassiveEffect == PassiveEffect.Evasion))
+        {
+            evasionChance += skill.PassiveValue / 100.0;
+        }
+
+        return _random.RollChance(evasionChance);
+    }
+
+    private bool CheckCounterAttack(List<Skill> skills)
+    {
+        double counterChance = 0;
+        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Passive && s.PassiveEffect == PassiveEffect.CounterAttack))
+        {
+            counterChance += skill.PassiveValue / 100.0;
+        }
+        return _random.RollChance(counterChance);
+    }
+
+    private int ApplyLifeSteal(List<Skill> skills, int damageDealt, ref int currentHealth, int maxHealth)
+    {
+        double lifeStealPercent = 0;
+        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Passive && s.PassiveEffect == PassiveEffect.LifeSteal))
+        {
+            lifeStealPercent += skill.PassiveValue / 100.0;
+        }
+
+        if (lifeStealPercent <= 0) return 0;
+
+        int healing = (int)(damageDealt * lifeStealPercent);
+        int oldHealth = currentHealth;
+        currentHealth = Math.Min(maxHealth, currentHealth + healing);
+        return currentHealth - oldHealth;
+    }
+
+    private (int damage, string action, string? skillNarrative) CalculatePlayerAttackWithSkills(Character character, Enemy enemy, List<Skill> skills)
+    {
+        // Check for active skill trigger first
+        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Active))
+        {
+            if (_random.RollChance(skill.TriggerChance))
+            {
+                int statBonus = skill.ScalingStat.HasValue ? (int)(character.GetStat(skill.ScalingStat.Value) * skill.ScalingMultiplier) : 0;
+                int skillDamage = skill.BaseDamage + statBonus;
+
+                // Defense reduction
+                int enemyDefense = enemy.Endurance / 5;
+                skillDamage = Math.Max(1, skillDamage - enemyDefense);
+
+                return (skillDamage, skill.ActiveNarrative ?? "uses a special skill", skill.Name + " activated!");
+            }
+        }
+
+        // Regular attack with passive modifiers
         int baseDamage = character.Class switch
         {
             CharacterClass.Warrior => character.Strength,
@@ -272,11 +370,16 @@ public class BattleService : IBattleService
             _ => character.Strength
         };
 
-        // Add variance and scaling
         int damage = (int)(baseDamage * 0.3) + _random.Next(5, 15);
-        
-        // Critical hit check (based on luck)
-        bool isCritical = _random.RollChance(character.Luck / 500.0);
+
+        // Critical hit check (base + skill bonuses)
+        double critChance = character.Luck / 500.0;
+        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Passive && s.PassiveEffect == PassiveEffect.CriticalChance))
+        {
+            critChance += skill.PassiveValue / 100.0;
+        }
+
+        bool isCritical = _random.RollChance(critChance);
         if (isCritical)
         {
             damage = (int)(damage * 1.5);
@@ -287,17 +390,37 @@ public class BattleService : IBattleService
         damage = Math.Max(1, damage - defense);
 
         string action = GenerateAttackAction(character.Class, isCritical);
-        return (damage, action);
+        return (damage, action, isCritical ? "Critical hit!" : null);
     }
 
-    private (int damage, string action) CalculateEnemyAttack(Enemy enemy, Character character)
+    private (int damage, string action) CalculateEnemyAttackWithSkills(Enemy enemy, Character character, List<Skill> skills, ref int enemyHealth)
     {
         int baseDamage = (enemy.Strength + enemy.Intelligence) / 2;
         int damage = (int)(baseDamage * 0.25) + _random.Next(3, 12);
 
         // Defense from character's endurance
         int defense = character.Endurance / 5;
+
+        // Add damage reduction from skills
+        double damageReduction = 0;
+        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Passive && s.PassiveEffect == PassiveEffect.DamageReduction))
+        {
+            damageReduction += skill.PassiveValue / 100.0;
+        }
+
+        damage = (int)(damage * (1 - damageReduction));
         damage = Math.Max(1, damage - defense);
+
+        // Apply thorns damage to enemy
+        double thornsDamage = 0;
+        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Passive && s.PassiveEffect == PassiveEffect.Thorns))
+        {
+            thornsDamage += damage * (skill.PassiveValue / 100.0);
+        }
+        if (thornsDamage > 0)
+        {
+            enemyHealth -= (int)thornsDamage;
+        }
 
         string[] actions = { "strikes", "attacks", "lunges at you", "swings wildly" };
         string action = actions[_random.Next(actions.Length)];

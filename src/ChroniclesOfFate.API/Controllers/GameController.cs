@@ -266,6 +266,52 @@ public class GameController : ControllerBase
         }
     }
 
+    // ============ Skills ============
+
+    [HttpGet("sessions/{sessionId}/skills")]
+    public async Task<IActionResult> GetCharacterSkills(int sessionId)
+    {
+        try
+        {
+            var session = await _sessionService.GetSessionAsync(sessionId, UserId);
+            if (session?.Character == null)
+                return NotFound();
+
+            var characterSkills = await _unitOfWork.CharacterSkills.GetByCharacterWithSkillsAsync(session.Character.Id);
+
+            var dtos = characterSkills.Where(cs => cs.Skill != null).Select(cs => new CharacterSkillDto(
+                cs.Id,
+                new SkillDto(
+                    cs.Skill!.Id,
+                    cs.Skill.Name,
+                    cs.Skill.Description,
+                    cs.Skill.IconUrl,
+                    cs.Skill.SkillType,
+                    cs.Skill.Rarity,
+                    cs.Skill.PassiveEffect,
+                    cs.Skill.PassiveValue,
+                    cs.Skill.TriggerChance,
+                    cs.Skill.BaseDamage,
+                    cs.Skill.ScalingStat,
+                    cs.Skill.ScalingMultiplier,
+                    cs.Skill.ActiveNarrative,
+                    cs.Skill.BonusEffect,
+                    cs.Skill.BonusPercentage,
+                    cs.Skill.BonusFlatValue
+                ),
+                cs.AcquiredAt,
+                cs.AcquiredOnTurn,
+                cs.AcquisitionSource
+            )).ToList();
+
+            return Ok(dtos);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     // ============ Message Log ============
 
     [HttpGet("sessions/{sessionId}/messagelog")]

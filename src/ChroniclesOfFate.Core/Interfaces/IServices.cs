@@ -66,17 +66,18 @@ public interface ITurnService
 public interface IRandomEventService
 {
     Task<RandomEventDto?> TryTriggerEventAsync(
-        int characterId, 
-        ActionType action, 
-        IEnumerable<int> equippedStorybookIds);
-    
+        int characterId,
+        ActionType action,
+        IEnumerable<int> equippedStorybookIds,
+        bool preferHigherRarity = false);
+
     Task<EventChoiceResultDto> ProcessChoiceAsync(
-        int characterId, 
-        int eventId, 
+        int characterId,
+        int eventId,
         int choiceId);
-    
+
     Task<IEnumerable<RandomEventDto>> GetAvailableEventsAsync(
-        int characterId, 
+        int characterId,
         ActionType action);
 }
 

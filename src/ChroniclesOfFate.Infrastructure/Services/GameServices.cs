@@ -90,7 +90,7 @@ public class GameSessionService : IGameSessionService
             GetSeasonBonuses(character.CurrentSeason)
         );
 
-        var actions = new List<string> { "Train", "Rest", "Explore", "Battle", "Study" };
+        var actions = new List<string> { "Train", "Rest", "Explore", "Battle" };
 
         return new GameStateDto(
             MapToCharacterDto(character),
@@ -116,7 +116,7 @@ public class GameSessionService : IGameSessionService
         Season.Spring => new List<string> { "Endurance training +20%", "Exploration rewards +10%" },
         Season.Summer => new List<string> { "Endurance training +20%", "Battle experience +15%" },
         Season.Autumn => new List<string> { "Arcane Studies +25%", "Event chance +10%" },
-        Season.Winter => new List<string> { "Rest recovery +20%", "Study bonus +15%" },
+        Season.Winter => new List<string> { "Rest recovery +20%", "Intelligence training +15%" },
         _ => new List<string>()
     };
 

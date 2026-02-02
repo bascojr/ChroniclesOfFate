@@ -128,6 +128,27 @@ public interface IMessageLogEntryRepository : IRepository<MessageLogEntry>
 }
 
 /// <summary>
+/// Skill repository
+/// </summary>
+public interface ISkillRepository : IRepository<Skill>
+{
+    Task<IEnumerable<Skill>> GetByTypeAsync(SkillType skillType);
+    Task<IEnumerable<Skill>> GetActiveSkillsAsync();
+    Task<Skill?> GetWithDetailsAsync(int skillId);
+}
+
+/// <summary>
+/// Character skill repository
+/// </summary>
+public interface ICharacterSkillRepository : IRepository<CharacterSkill>
+{
+    Task<IEnumerable<CharacterSkill>> GetByCharacterIdAsync(int characterId);
+    Task<IEnumerable<CharacterSkill>> GetByCharacterWithSkillsAsync(int characterId);
+    Task<bool> CharacterHasSkillAsync(int characterId, int skillId);
+    Task<CharacterSkill?> AddSkillToCharacterAsync(int characterId, int skillId, string? source = null, int turn = 0);
+}
+
+/// <summary>
 /// Unit of Work pattern for transaction management
 /// </summary>
 public interface IUnitOfWork : IDisposable
@@ -143,7 +164,9 @@ public interface IUnitOfWork : IDisposable
     IBattleLogRepository BattleLogs { get; }
     IGameEventRepository GameEvents { get; }
     IMessageLogEntryRepository MessageLogEntries { get; }
-    
+    ISkillRepository Skills { get; }
+    ICharacterSkillRepository CharacterSkills { get; }
+
     Task<int> SaveChangesAsync();
     Task BeginTransactionAsync();
     Task CommitTransactionAsync();

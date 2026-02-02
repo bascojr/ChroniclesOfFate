@@ -40,6 +40,7 @@ public class Character
     public int GameSessionId { get; set; }
     public GameSession? GameSession { get; set; }
     public ICollection<CharacterStorybook> EquippedStorybooks { get; set; } = new List<CharacterStorybook>();
+    public ICollection<CharacterSkill> Skills { get; set; } = new List<CharacterSkill>();
     public ICollection<GameEvent> EventHistory { get; set; } = new List<GameEvent>();
     public ICollection<BattleLog> BattleHistory { get; set; } = new List<BattleLog>();
     

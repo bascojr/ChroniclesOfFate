@@ -295,3 +295,42 @@ public record AddMessageLogDto(
     int Month,
     List<StatChangeDto> StatChanges
 );
+
+// ============ Skill DTOs ============
+
+public record SkillDto(
+    int Id,
+    string Name,
+    string Description,
+    string IconUrl,
+    SkillType SkillType,
+    Rarity Rarity,
+    // Passive
+    PassiveEffect? PassiveEffect,
+    double PassiveValue,
+    // Active
+    double TriggerChance,
+    int BaseDamage,
+    StatType? ScalingStat,
+    double ScalingMultiplier,
+    string? ActiveNarrative,
+    // Bonus
+    BonusEffect? BonusEffect,
+    double BonusPercentage,
+    int BonusFlatValue
+);
+
+public record CharacterSkillDto(
+    int Id,
+    SkillDto Skill,
+    DateTime AcquiredAt,
+    int AcquiredOnTurn,
+    string? AcquisitionSource
+);
+
+public record SkillTriggerResultDto(
+    string SkillName,
+    string Narrative,
+    int DamageDealt,
+    int HealingDone
+);

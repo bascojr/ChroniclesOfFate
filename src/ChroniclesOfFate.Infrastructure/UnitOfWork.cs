@@ -24,6 +24,8 @@ public class UnitOfWork : IUnitOfWork
     private IBattleLogRepository? _battleLogs;
     private IGameEventRepository? _gameEvents;
     private IMessageLogEntryRepository? _messageLogEntries;
+    private ISkillRepository? _skills;
+    private ICharacterSkillRepository? _characterSkills;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -62,6 +64,12 @@ public class UnitOfWork : IUnitOfWork
 
     public IMessageLogEntryRepository MessageLogEntries =>
         _messageLogEntries ??= new MessageLogEntryRepository(_context);
+
+    public ISkillRepository Skills =>
+        _skills ??= new SkillRepository(_context);
+
+    public ICharacterSkillRepository CharacterSkills =>
+        _characterSkills ??= new CharacterSkillRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

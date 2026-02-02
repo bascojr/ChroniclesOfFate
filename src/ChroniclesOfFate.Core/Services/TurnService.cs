@@ -50,13 +50,35 @@ public class TurnService : ITurnService
             ActionType.Rest => await ProcessRestAsync(character.Id),
             ActionType.Explore => await ProcessExploreAsync(character.Id),
             ActionType.Battle => await ProcessBattleTurnAsync(character, action.TargetId),
-            ActionType.Study => await ProcessStudyAsync(character),
             _ => CreateErrorResult(character, "Unknown action type")
         };
 
         // Advance turn if action was successful
         if (result.Success)
         {
+            // Apply bonus skills (health regen, etc.)
+            var skillBonusResult = ApplyBonusSkills(character);
+            if (skillBonusResult != null)
+            {
+                var updatedStatChanges = result.StatChanges.ToList();
+                updatedStatChanges.AddRange(skillBonusResult.StatChanges);
+
+                var updatedNarrative = result.Narrative;
+                if (!string.IsNullOrEmpty(skillBonusResult.Narrative))
+                {
+                    updatedNarrative += " " + skillBonusResult.Narrative;
+                }
+
+                result = new TurnResultDto(
+                    result.Success,
+                    updatedNarrative,
+                    updatedStatChanges,
+                    result.TriggeredEvent,
+                    result.BattleResult,
+                    result.UpdatedCharacter
+                );
+            }
+
             // Try to trigger a mini random event (20% chance)
             var miniEventResult = TryTriggerMiniEvent(character);
             if (miniEventResult != null)
@@ -117,14 +139,16 @@ public class TurnService : ITurnService
         var statChanges = new List<StatChangeDto>();
         var narrativeParts = new List<string>();
 
-        // Energy recovery based on endurance
-        int energyRecovery = 30 + (character.Endurance / 20);
+        // Energy recovery: base 50, roll up to 70 (50 + 0-20 random)
+        int baseRecovery = 50;
+        int bonusRecovery = _random.Next(0, 21); // 0-20 bonus
+        int energyRecovery = baseRecovery + bonusRecovery;
         int oldEnergy = character.CurrentEnergy;
         character.CurrentEnergy = Math.Min(character.MaxEnergy, character.CurrentEnergy + energyRecovery);
         statChanges.Add(new StatChangeDto("Energy", oldEnergy, character.CurrentEnergy, character.CurrentEnergy - oldEnergy));
 
         // Health recovery
-        int healthRecovery = 10 + (character.Endurance / 30);
+        int healthRecovery = 15 + (character.Endurance / 25);
         int oldHealth = character.CurrentHealth;
         character.CurrentHealth = Math.Min(character.MaxHealth, character.CurrentHealth + healthRecovery);
         statChanges.Add(new StatChangeDto("Health", oldHealth, character.CurrentHealth, character.CurrentHealth - oldHealth));
@@ -161,10 +185,10 @@ public class TurnService : ITurnService
         var character = await _unitOfWork.Characters.GetWithStorybooksAsync(characterId)
             ?? throw new InvalidOperationException("Character not found");
 
-        const int exploreCost = 15;
+        const int exploreCost = 50;
         if (character.CurrentEnergy < exploreCost)
         {
-            return CreateErrorResult(character, "Not enough energy to explore. Rest first.");
+            return CreateErrorResult(character, "Not enough energy to explore. You need 50 energy. Rest first.");
         }
 
         var statChanges = new List<StatChangeDto>();
@@ -177,34 +201,54 @@ public class TurnService : ITurnService
 
         narrativeParts.Add(GenerateExploreNarrative(character.CurrentSeason));
 
-        // High chance of random event while exploring
+        // Very high chance of random event while exploring (80%) with bias towards higher rarity
         RandomEventDto? triggeredEvent = null;
         var storybookIds = character.EquippedStorybooks.Select(es => es.StorybookId).ToList();
-        
-        triggeredEvent = await _eventService.TryTriggerEventAsync(characterId, ActionType.Explore, storybookIds);
-        
+
+        // 80% chance to trigger an event, with preference for higher rarity
+        if (_random.RollChance(0.80))
+        {
+            triggeredEvent = await _eventService.TryTriggerEventAsync(characterId, ActionType.Explore, storybookIds, preferHigherRarity: true);
+        }
+
         if (triggeredEvent != null)
         {
             narrativeParts.Add($"You encounter: {triggeredEvent.Title}");
         }
         else
         {
-            // Default exploration rewards if no event
-            int goldFound = _random.Next(5, 20) + (character.Luck / 20);
+            // Enhanced exploration rewards if no event - better since it costs more energy
+            int goldFound = _random.Next(20, 50) + (character.Luck / 10);
             int oldGold = character.Gold;
             character.Gold += goldFound;
             statChanges.Add(new StatChangeDto("Gold", oldGold, character.Gold, goldFound));
             narrativeParts.Add($"You find {goldFound} gold during your exploration.");
 
-            // Small chance of stat gain
-            if (_random.RollChance(0.2))
+            // Higher chance of stat gains (40%)
+            if (_random.RollChance(0.40))
             {
                 var randomStat = (StatType)_random.Next(6);
-                int gain = _random.Next(1, 4);
+                int gain = _random.Next(2, 5);
                 int oldStat = character.GetStat(randomStat);
                 character.AddStat(randomStat, gain);
                 statChanges.Add(new StatChangeDto(randomStat.ToString(), oldStat, character.GetStat(randomStat), gain));
-                narrativeParts.Add($"Your {randomStat} improved slightly from the experience.");
+                narrativeParts.Add($"Your {randomStat} improved from the experience.");
+            }
+
+            // Bonus experience from exploration
+            int expGain = _random.Next(15, 30);
+            character.Experience += expGain;
+            statChanges.Add(new StatChangeDto("Experience", character.Experience - expGain, character.Experience, expGain));
+            narrativeParts.Add($"You gained valuable experience from your journey.");
+
+            // Small chance for reputation gain (20%)
+            if (_random.RollChance(0.20))
+            {
+                int repGain = _random.Next(3, 8);
+                int oldRep = character.Reputation;
+                character.Reputation += repGain;
+                statChanges.Add(new StatChangeDto("Reputation", oldRep, character.Reputation, repGain));
+                narrativeParts.Add($"Your exploits have impressed the locals.");
             }
         }
 
@@ -280,54 +324,94 @@ public class TurnService : ITurnService
         );
     }
 
-    private async Task<TurnResultDto> ProcessStudyAsync(Character character)
+    private record MiniEventResult(string Narrative, List<StatChangeDto> StatChanges);
+    private record SkillBonusResult(string? Narrative, List<StatChangeDto> StatChanges);
+
+    private SkillBonusResult? ApplyBonusSkills(Character character)
     {
-        const int studyCost = 20;
-        if (character.CurrentEnergy < studyCost)
-        {
-            return CreateErrorResult(character, "Not enough energy to study. Rest first.");
-        }
+        var skills = character.Skills?.Where(cs => cs.Skill != null && cs.Skill.SkillType == SkillType.Bonus)
+            .Select(cs => cs.Skill!).ToList();
+
+        if (skills == null || !skills.Any())
+            return null;
 
         var statChanges = new List<StatChangeDto>();
+        var narrativeParts = new List<string>();
 
-        // Spend energy
-        int oldEnergy = character.CurrentEnergy;
-        character.CurrentEnergy -= studyCost;
-        statChanges.Add(new StatChangeDto("Energy", oldEnergy, character.CurrentEnergy, -studyCost));
-
-        // Intelligence gain
-        int intGain = 3 + _random.Next(1, 4);
-        int oldInt = character.Intelligence;
-        character.AddStat(StatType.Intelligence, intGain);
-        statChanges.Add(new StatChangeDto("Intelligence", oldInt, character.Intelligence, intGain));
-
-        // Experience gain
-        int expGain = 15;
-        character.Experience += expGain;
-        statChanges.Add(new StatChangeDto("Experience", character.Experience - expGain, character.Experience, expGain));
-
-        await _unitOfWork.Characters.UpdateAsync(character);
-        await _unitOfWork.SaveChangesAsync();
-
-        string[] narratives =
+        foreach (var skill in skills)
         {
-            "You spend the month studying ancient tomes and arcane knowledge.",
-            "Hours of focused study expand your understanding of the world.",
-            "You practice mental exercises and meditation, sharpening your mind.",
-            "Time spent in the library yields new insights and knowledge."
-        };
+            if (!skill.BonusEffect.HasValue) continue;
 
-        return new TurnResultDto(
-            true,
-            narratives[_random.Next(narratives.Length)],
-            statChanges,
-            null,
-            null,
-            await GetCharacterDtoAsync(character)
+            switch (skill.BonusEffect.Value)
+            {
+                case BonusEffect.HealthRegen:
+                    int healthRegen = skill.BonusFlatValue;
+                    if (healthRegen > 0 && character.CurrentHealth < character.MaxHealth)
+                    {
+                        int oldHealth = character.CurrentHealth;
+                        character.CurrentHealth = Math.Min(character.MaxHealth, character.CurrentHealth + healthRegen);
+                        int actualRegen = character.CurrentHealth - oldHealth;
+                        if (actualRegen > 0)
+                        {
+                            statChanges.Add(new StatChangeDto("Health", oldHealth, character.CurrentHealth, actualRegen));
+                            narrativeParts.Add($"Your {skill.Name} restores {actualRegen} health.");
+                        }
+                    }
+                    break;
+
+                // Note: GoldGain, ExperienceGain, EnergyGain, LuckBoost, TrainingBoost
+                // are applied at the point where those resources are gained (in respective methods)
+            }
+        }
+
+        if (!statChanges.Any())
+            return null;
+
+        return new SkillBonusResult(
+            narrativeParts.Any() ? string.Join(" ", narrativeParts) : null,
+            statChanges
         );
     }
 
-    private record MiniEventResult(string Narrative, List<StatChangeDto> StatChanges);
+    /// <summary>
+    /// Gets bonus percentage from skills for a specific bonus type
+    /// </summary>
+    public double GetSkillBonusPercentage(Character character, BonusEffect bonusType)
+    {
+        var skills = character.Skills?.Where(cs => cs.Skill != null &&
+            cs.Skill.SkillType == SkillType.Bonus &&
+            cs.Skill.BonusEffect == bonusType)
+            .Select(cs => cs.Skill!).ToList();
+
+        if (skills == null || !skills.Any()) return 0;
+
+        double totalPercentage = 0;
+        foreach (var skill in skills)
+        {
+            totalPercentage += skill.BonusPercentage;
+        }
+        return totalPercentage;
+    }
+
+    /// <summary>
+    /// Gets flat bonus from skills for a specific bonus type
+    /// </summary>
+    public int GetSkillBonusFlat(Character character, BonusEffect bonusType)
+    {
+        var skills = character.Skills?.Where(cs => cs.Skill != null &&
+            cs.Skill.SkillType == SkillType.Bonus &&
+            cs.Skill.BonusEffect == bonusType)
+            .Select(cs => cs.Skill!).ToList();
+
+        if (skills == null || !skills.Any()) return 0;
+
+        int totalFlat = 0;
+        foreach (var skill in skills)
+        {
+            totalFlat += skill.BonusFlatValue;
+        }
+        return totalFlat;
+    }
 
     private MiniEventResult? TryTriggerMiniEvent(Character character)
     {

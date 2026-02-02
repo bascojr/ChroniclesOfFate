@@ -66,6 +66,18 @@ public class EventChoice
     /// Can trigger a battle encounter
     /// </summary>
     public int? TriggerBattleId { get; set; }
-    
+
+    /// <summary>
+    /// Skill granted on success (if any)
+    /// </summary>
+    public int? GrantSkillId { get; set; }
+    public Skill? GrantSkill { get; set; }
+
+    /// <summary>
+    /// Skill granted on failure (if any, usually negative or lesser skill)
+    /// </summary>
+    public int? FailureGrantSkillId { get; set; }
+    public Skill? FailureGrantSkill { get; set; }
+
     public int DisplayOrder { get; set; }
 }

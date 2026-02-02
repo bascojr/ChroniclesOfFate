@@ -46,6 +46,9 @@
                     <div class="resource"><span>💰 Gold</span><span>@gameState.Character.Gold</span></div>
                     <div class="resource"><span>⭐ Rep</span><span>@gameState.Character.Reputation</span></div>
                 </div>
+                <button class="skills-btn" @onclick="() => showSkills = true">
+                    ✨ Skills (@characterSkills.Count)
+                </button>
                 <div class="power">Total Power: <strong>@gameState.Character.TotalPower</strong></div>
             </div>
 
@@ -74,10 +77,61 @@
                 {
                     <div class="battle-result @battleResult.Result.ToString().ToLower()">
                         <h3>@(battleResult.Result == BattleResult.Victory ? "⚔️ Victory!" : "💀 Defeat")</h3>
-                        <p>@battleResult.Narrative</p>
-                        @if (battleResult.ExperienceGained > 0) { <span>+@battleResult.ExperienceGained XP</span> }
-                        @if (battleResult.GoldGained > 0) { <span>+@battleResult.GoldGained Gold</span> }
-                        <button @onclick="() => battleResult = null">Continue</button>
+                        <p class="battle-narrative">@battleResult.Narrative</p>
+
+                        <div class="battle-rewards">
+                            @if (battleResult.ExperienceGained > 0) { <span class="reward">+@battleResult.ExperienceGained XP</span> }
+                            @if (battleResult.GoldGained > 0) { <span class="reward">+@battleResult.GoldGained Gold</span> }
+                            @if (battleResult.ReputationGained > 0) { <span class="reward">+@battleResult.ReputationGained Rep</span> }
+                            @if (battleResult.HealthLost > 0) { <span class="damage">-@battleResult.HealthLost HP</span> }
+                        </div>
+
+                        <button class="btn-toggle-log" @onclick="() => showCombatLog = !showCombatLog">
+                            @(showCombatLog ? "Hide" : "Show") Combat Log (@battleResult.Rounds.Count rounds)
+                        </button>
+
+                        @if (showCombatLog)
+                        {
+                            <div class="combat-log">
+                                <div class="combat-log-header">
+                                    <span>You vs @battleResult.Enemy.Name (Tier @battleResult.Enemy.DifficultyTier)</span>
+                                </div>
+                                @foreach (var round in battleResult.Rounds)
+                                {
+                                    <div class="combat-round">
+                                        <div class="round-header">Round @round.RoundNumber</div>
+                                        <div class="round-actions">
+                                            <div class="action player-action">
+                                                <span class="action-label">You:</span>
+                                                <span class="action-text">@round.PlayerAction</span>
+                                                @if (round.PlayerDamage > 0)
+                                                {
+                                                    <span class="damage-dealt">@round.PlayerDamage dmg</span>
+                                                }
+                                            </div>
+                                            <div class="action enemy-action">
+                                                <span class="action-label">@battleResult.Enemy.Name:</span>
+                                                <span class="action-text">@round.EnemyAction</span>
+                                                @if (round.EnemyDamage > 0)
+                                                {
+                                                    <span class="damage-taken">@round.EnemyDamage dmg</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="round-status">
+                                            <span class="health player-health">Your HP: @round.PlayerHealthRemaining</span>
+                                            <span class="health enemy-health">Enemy HP: @round.EnemyHealthRemaining</span>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(round.Narrative))
+                                        {
+                                            <div class="round-narrative">@round.Narrative</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <button class="btn-continue" @onclick="CloseBattleResult">Continue</button>
                     </div>
                 }
                 else
@@ -87,7 +141,6 @@
                         <button class="rest" @onclick="() => ProcessAction(ActionType.Rest)" disabled="@isProcessing">🛏️ Rest</button>
                         <button class="explore" @onclick="() => ProcessAction(ActionType.Explore)" disabled="@isProcessing">🗺️ Explore</button>
                         <button class="battle" @onclick="() => showBattle = true" disabled="@isProcessing">⚔️ Battle</button>
-                        <button class="study" @onclick="() => ProcessAction(ActionType.Study)" disabled="@isProcessing">📚 Study</button>
                     </div>
 
                     @if (showTraining)
@@ -208,6 +261,96 @@
                 </div>
             </div>
         }
+
+        @if (showSkills)
+        {
+            <div class="modal-overlay" @onclick="() => showSkills = false">
+                <div class="modal-content skills-modal" @onclick:stopPropagation="true">
+                    <h2>✨ Skills</h2>
+                    @if (!characterSkills.Any())
+                    {
+                        <p class="no-skills">You haven't learned any skills yet. Explore the world and make choices during events to acquire skills!</p>
+                    }
+                    else
+                    {
+                        @if (characterSkills.Any(s => s.Skill.SkillType == SkillType.Passive))
+                        {
+                            <div class="skill-category">
+                                <h3>🛡️ Passive Skills</h3>
+                                <p class="category-desc">Automatically active during combat</p>
+                                <div class="skills-grid">
+                                    @foreach (var cs in characterSkills.Where(s => s.Skill.SkillType == SkillType.Passive))
+                                    {
+                                        <div class="skill-card @cs.Skill.Rarity.ToString().ToLower()">
+                                            <div class="skill-header">
+                                                <span class="skill-name">@cs.Skill.Name</span>
+                                                <span class="skill-rarity">@cs.Skill.Rarity</span>
+                                            </div>
+                                            <p class="skill-desc">@cs.Skill.Description</p>
+                                            <div class="skill-effect">
+                                                @GetPassiveEffectText(cs.Skill)
+                                            </div>
+                                            <div class="skill-source">From: @cs.AcquisitionSource</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (characterSkills.Any(s => s.Skill.SkillType == SkillType.Active))
+                        {
+                            <div class="skill-category">
+                                <h3>⚔️ Active Skills</h3>
+                                <p class="category-desc">Triggered during combat based on chance</p>
+                                <div class="skills-grid">
+                                    @foreach (var cs in characterSkills.Where(s => s.Skill.SkillType == SkillType.Active))
+                                    {
+                                        <div class="skill-card @cs.Skill.Rarity.ToString().ToLower()">
+                                            <div class="skill-header">
+                                                <span class="skill-name">@cs.Skill.Name</span>
+                                                <span class="skill-rarity">@cs.Skill.Rarity</span>
+                                            </div>
+                                            <p class="skill-desc">@cs.Skill.Description</p>
+                                            <div class="skill-effect">
+                                                @GetActiveEffectText(cs.Skill)
+                                            </div>
+                                            <div class="skill-source">From: @cs.AcquisitionSource</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (characterSkills.Any(s => s.Skill.SkillType == SkillType.Bonus))
+                        {
+                            <div class="skill-category">
+                                <h3>🌟 Bonus Skills</h3>
+                                <p class="category-desc">Adventure-wide passive bonuses</p>
+                                <div class="skills-grid">
+                                    @foreach (var cs in characterSkills.Where(s => s.Skill.SkillType == SkillType.Bonus))
+                                    {
+                                        <div class="skill-card @cs.Skill.Rarity.ToString().ToLower()">
+                                            <div class="skill-header">
+                                                <span class="skill-name">@cs.Skill.Name</span>
+                                                <span class="skill-rarity">@cs.Skill.Rarity</span>
+                                            </div>
+                                            <p class="skill-desc">@cs.Skill.Description</p>
+                                            <div class="skill-effect">
+                                                @GetBonusEffectText(cs.Skill)
+                                            </div>
+                                            <div class="skill-source">From: @cs.AcquisitionSource</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                    <div class="modal-actions">
+                        <button class="btn-secondary" @onclick="() => showSkills = false">Close</button>
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -220,16 +363,24 @@
     private List<StatChangeDto> lastStatChanges = new();
     private RandomEventDto? currentEvent;
     private BattleResultDto? battleResult;
-    private bool showTraining, showBattle;
+    private bool showTraining, showBattle, showCombatLog;
+    private bool showSkills = false;
     private List<TrainingScenarioDto> trainingScenarios = new();
     private List<EnemyDto> enemies = new();
     private List<MessageLogEntryDto> messageLog = new();
+    private List<CharacterSkillDto> characterSkills = new();
     private const int MaxLogEntries = 20;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadGameState();
         await LoadMessageLog();
+        await LoadSkills();
+    }
+
+    private async Task LoadSkills()
+    {
+        characterSkills = await GameApi.GetSkillsAsync(SessionId);
     }
 
     private async Task LoadMessageLog()
@@ -246,10 +397,16 @@
         isLoading = false;
     }
 
+    private void CloseBattleResult()
+    {
+        battleResult = null;
+        showCombatLog = false;
+    }
+
     private async Task ProcessAction(ActionType action, int? targetId = null)
     {
         isProcessing = true;
-        showTraining = showBattle = false;
+        showTraining = showBattle = showCombatLog = false;
         var result = await GameApi.ProcessTurnAsync(SessionId, action, targetId);
         if (result != null)
         {
@@ -273,6 +430,23 @@
             if (!string.IsNullOrEmpty(miniEventNarrative))
             {
                 await AddToMessageLogAsync(miniEventNarrative, miniEventChanges, miniEventNarrative.Contains("(-") ? "negative" : "positive", year, month);
+            }
+
+            // Log battle result
+            if (result.BattleResult != null)
+            {
+                var br = result.BattleResult;
+                var battleLogType = br.Result == BattleResult.Victory ? "positive" : "negative";
+                var battleIcon = br.Result == BattleResult.Victory ? "⚔️" : "💀";
+                var battleOutcome = br.Result == BattleResult.Victory ? "Victory" : "Defeat";
+                var battleStats = new List<StatChangeDto>();
+                if (br.ExperienceGained > 0) battleStats.Add(new StatChangeDto("Experience", 0, br.ExperienceGained, br.ExperienceGained));
+                if (br.GoldGained > 0) battleStats.Add(new StatChangeDto("Gold", 0, br.GoldGained, br.GoldGained));
+                if (br.ReputationGained > 0) battleStats.Add(new StatChangeDto("Reputation", 0, br.ReputationGained, br.ReputationGained));
+                if (br.HealthLost > 0) battleStats.Add(new StatChangeDto("Health", 0, -br.HealthLost, -br.HealthLost));
+
+                var battleLog = $"{battleIcon} {battleOutcome} vs {br.Enemy.Name} ({br.Rounds.Count} rounds)";
+                await AddToMessageLogAsync(battleLog, battleStats, battleLogType, year, month);
             }
 
             await LoadGameState();
@@ -391,6 +565,7 @@
             lastStatChanges = result.StatChanges;
             currentEvent = result.FollowUpEvent;
             await LoadGameState();
+            await LoadSkills(); // Reload skills in case event granted a skill
 
             // Log the storybook event to message log
             int year = gameState?.Character.CurrentYear ?? 1;
@@ -415,4 +590,50 @@
     }
 
     private string GetSeasonIcon(Season s) => s switch { Season.Spring => "🌸", Season.Summer => "☀️", Season.Autumn => "🍂", Season.Winter => "❄️", _ => "🌍" };
+
+    private string GetPassiveEffectText(SkillDto skill)
+    {
+        if (!skill.PassiveEffect.HasValue) return "";
+        return skill.PassiveEffect.Value switch
+        {
+            PassiveEffect.Evasion => $"Evasion: {skill.PassiveValue:P0}",
+            PassiveEffect.CriticalChance => $"Critical Chance: +{skill.PassiveValue:P0}",
+            PassiveEffect.DamageReduction => $"Damage Reduction: {skill.PassiveValue:P0}",
+            PassiveEffect.LifeSteal => $"Life Steal: {skill.PassiveValue:P0}",
+            PassiveEffect.CounterAttack => $"Counter Attack: {skill.PassiveValue:P0}",
+            PassiveEffect.Thorns => $"Thorns: {skill.PassiveValue:P0} damage reflected",
+            _ => ""
+        };
+    }
+
+    private string GetActiveEffectText(SkillDto skill)
+    {
+        var parts = new List<string>();
+        if (skill.TriggerChance > 0) parts.Add($"Trigger: {skill.TriggerChance:P0}");
+        if (skill.BaseDamage > 0) parts.Add($"Base Damage: {skill.BaseDamage}");
+        if (skill.ScalingStat.HasValue && skill.ScalingMultiplier > 0)
+            parts.Add($"Scales: {skill.ScalingMultiplier:P0} {skill.ScalingStat}");
+        return string.Join(" | ", parts);
+    }
+
+    private string GetBonusEffectText(SkillDto skill)
+    {
+        if (!skill.BonusEffect.HasValue) return "";
+        var effectName = skill.BonusEffect.Value switch
+        {
+            BonusEffect.GoldGain => "Gold Gain",
+            BonusEffect.ExperienceGain => "XP Gain",
+            BonusEffect.EnergyGain => "Energy Gain",
+            BonusEffect.HealthRegen => "Health Regen",
+            BonusEffect.LuckBoost => "Luck Boost",
+            BonusEffect.TrainingBoost => "Training Boost",
+            _ => "Bonus"
+        };
+
+        if (skill.BonusPercentage > 0)
+            return $"{effectName}: +{skill.BonusPercentage:P0}";
+        if (skill.BonusFlatValue > 0)
+            return $"{effectName}: +{skill.BonusFlatValue}";
+        return effectName;
+    }
 }

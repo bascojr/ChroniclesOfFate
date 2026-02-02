@@ -78,3 +78,5 @@ appsettings.Local.json
 
 # Publish output
 publish/
+Skills.txt
+.claude/

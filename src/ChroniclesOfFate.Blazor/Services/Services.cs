@@ -30,6 +30,7 @@ public interface IGameApiService
     Task<bool> EquipStorybookAsync(int sessionId, int storybookId, int slot);
     Task<List<MessageLogEntryDto>> GetMessageLogAsync(int sessionId);
     Task<MessageLogEntryDto?> AddMessageLogAsync(int sessionId, AddMessageLogDto dto);
+    Task<List<CharacterSkillDto>> GetSkillsAsync(int sessionId);
 }
 
 public class CustomAuthStateProvider : AuthenticationStateProvider
@@ -276,6 +277,19 @@ public class GameApiService : IGameApiService
         catch
         {
             return null;
+        }
+    }
+
+    public async Task<List<CharacterSkillDto>> GetSkillsAsync(int sessionId)
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<List<CharacterSkillDto>>($"api/game/sessions/{sessionId}/skills");
+            return result ?? new List<CharacterSkillDto>();
+        }
+        catch
+        {
+            return new List<CharacterSkillDto>();
         }
     }
 }
