@@ -6,6 +6,9 @@
         <AuthorizeView>
             <Authorized>
                 <span class="user-info">Welcome, @context.User.Identity?.Name</span>
+                <AuthorizeView Roles="Admin" Context="adminContext">
+                    <a href="/admin" class="btn-admin">Admin Panel</a>
+                </AuthorizeView>
                 <button class="btn-logout" @onclick="Logout">Logout</button>
             </Authorized>
         </AuthorizeView>

@@ -1,0 +1,364 @@
+@page "/admin/enemies"
+@layout ChroniclesOfFate.Blazor.Shared.AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminApiService AdminApi
+
+<PageTitle>Enemies - Admin</PageTitle>
+
+<div class="admin-table-container">
+    <div class="admin-table-header">
+        <h2>Enemies</h2>
+        <button class="btn-create" @onclick="ShowCreateModal">+ New Enemy</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="admin-loading">Loading enemies...</div>
+    }
+    else
+    {
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Tier</th>
+                    <th>Stats</th>
+                    <th>Rewards</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var enemy in enemies)
+                {
+                    <tr>
+                        <td>@enemy.Name</td>
+                        <td>@enemy.EnemyType</td>
+                        <td>@enemy.DifficultyTier</td>
+                        <td style="font-size: 0.75rem;">
+                            STR:@enemy.Strength AGI:@enemy.Agility INT:@enemy.Intelligence HP:@enemy.Health
+                        </td>
+                        <td style="font-size: 0.75rem;">
+                            XP:@enemy.ExperienceReward Gold:@enemy.GoldReward
+                        </td>
+                        <td>
+                            <span class="badge @(enemy.IsActive ? "badge-active" : "badge-inactive")">
+                                @(enemy.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <button class="btn-edit" @onclick="() => ShowEditModal(enemy)">Edit</button>
+                                <button class="btn-delete" @onclick="() => ShowDeleteConfirm(enemy)">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content admin-modal" @onclick:stopPropagation>
+            <h2>@(editingEnemy == null ? "Create Enemy" : "Edit Enemy")</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input class="form-input" @bind="formName" placeholder="Enemy name" />
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <input class="form-input" @bind="formEnemyType" placeholder="Normal, Boss, etc." />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea @bind="formDescription" placeholder="Enemy description..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Image URL</label>
+                <input class="form-input" @bind="formImageUrl" placeholder="https://..." />
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Strength</label>
+                    <input class="form-input" type="number" @bind="formStrength" />
+                </div>
+                <div class="form-group">
+                    <label>Agility</label>
+                    <input class="form-input" type="number" @bind="formAgility" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Intelligence</label>
+                    <input class="form-input" type="number" @bind="formIntelligence" />
+                </div>
+                <div class="form-group">
+                    <label>Endurance</label>
+                    <input class="form-input" type="number" @bind="formEndurance" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Health</label>
+                    <input class="form-input" type="number" @bind="formHealth" />
+                </div>
+                <div class="form-group">
+                    <label>Difficulty Tier (1-10)</label>
+                    <input class="form-input" type="number" @bind="formDifficultyTier" min="1" max="10" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Experience Reward</label>
+                    <input class="form-input" type="number" @bind="formExperienceReward" />
+                </div>
+                <div class="form-group">
+                    <label>Gold Reward</label>
+                    <input class="form-input" type="number" @bind="formGoldReward" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Reputation Reward</label>
+                    <input class="form-input" type="number" @bind="formReputationReward" />
+                </div>
+                <div class="form-group">
+                    <label>Active Seasons</label>
+                    <input class="form-input" @bind="formActiveSeasons" placeholder="Spring,Summer (or blank for all)" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Loot Table (JSON)</label>
+                <textarea @bind="formLootTable" placeholder='{"sword": 0.1, "potion": 0.3}'></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Abilities (JSON)</label>
+                <textarea @bind="formAbilities" placeholder='["Fireball", "Shield Bash"]'></textarea>
+            </div>
+
+            <div class="form-group form-checkbox">
+                <input type="checkbox" @bind="formIsActive" id="isActive" />
+                <label for="isActive">Active</label>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-message">@errorMessage</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn-primary" @onclick="SaveEnemy" disabled="@isSaving">
+                    @(isSaving ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDeleteConfirm)
+{
+    <div class="modal-overlay" @onclick="CloseDeleteConfirm">
+        <div class="modal-content" @onclick:stopPropagation>
+            <div class="confirm-dialog">
+                <h2>Delete Enemy</h2>
+                <p>Are you sure you want to delete "@deletingEnemy?.Name"? This action cannot be undone.</p>
+                <div class="confirm-actions">
+                    <button class="btn-cancel" @onclick="CloseDeleteConfirm">Cancel</button>
+                    <button class="btn-confirm-delete" @onclick="DeleteEnemy">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AdminEnemyDto> enemies = new();
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool showDeleteConfirm = false;
+    private bool isSaving = false;
+    private string errorMessage = "";
+
+    private AdminEnemyDto? editingEnemy;
+    private AdminEnemyDto? deletingEnemy;
+
+    // Form fields
+    private string formName = "";
+    private string formDescription = "";
+    private string formImageUrl = "";
+    private int formStrength = 20;
+    private int formAgility = 15;
+    private int formIntelligence = 10;
+    private int formEndurance = 15;
+    private int formHealth = 100;
+    private int formDifficultyTier = 1;
+    private string formEnemyType = "Normal";
+    private int formExperienceReward = 30;
+    private int formGoldReward = 20;
+    private int formReputationReward = 5;
+    private string formLootTable = "";
+    private string formActiveSeasons = "";
+    private string formAbilities = "";
+    private bool formIsActive = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEnemies();
+    }
+
+    private async Task LoadEnemies()
+    {
+        isLoading = true;
+        enemies = await AdminApi.GetAllEnemiesAsync();
+        isLoading = false;
+    }
+
+    private void ShowCreateModal()
+    {
+        editingEnemy = null;
+        ResetForm();
+        showModal = true;
+    }
+
+    private void ShowEditModal(AdminEnemyDto enemy)
+    {
+        editingEnemy = enemy;
+        formName = enemy.Name;
+        formDescription = enemy.Description;
+        formImageUrl = enemy.ImageUrl;
+        formStrength = enemy.Strength;
+        formAgility = enemy.Agility;
+        formIntelligence = enemy.Intelligence;
+        formEndurance = enemy.Endurance;
+        formHealth = enemy.Health;
+        formDifficultyTier = enemy.DifficultyTier;
+        formEnemyType = enemy.EnemyType;
+        formExperienceReward = enemy.ExperienceReward;
+        formGoldReward = enemy.GoldReward;
+        formReputationReward = enemy.ReputationReward;
+        formLootTable = enemy.LootTable ?? "";
+        formActiveSeasons = enemy.ActiveSeasons ?? "";
+        formAbilities = enemy.Abilities ?? "";
+        formIsActive = enemy.IsActive;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        errorMessage = "";
+    }
+
+    private void ResetForm()
+    {
+        formName = "";
+        formDescription = "";
+        formImageUrl = "";
+        formStrength = 20;
+        formAgility = 15;
+        formIntelligence = 10;
+        formEndurance = 15;
+        formHealth = 100;
+        formDifficultyTier = 1;
+        formEnemyType = "Normal";
+        formExperienceReward = 30;
+        formGoldReward = 20;
+        formReputationReward = 5;
+        formLootTable = "";
+        formActiveSeasons = "";
+        formAbilities = "";
+        formIsActive = true;
+    }
+
+    private async Task SaveEnemy()
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+        {
+            errorMessage = "Name is required.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = "";
+
+        if (editingEnemy == null)
+        {
+            var dto = new CreateEnemyDto(
+                formName, formDescription, formImageUrl,
+                formStrength, formAgility, formIntelligence, formEndurance, formHealth,
+                formDifficultyTier, formEnemyType,
+                formExperienceReward, formGoldReward, formReputationReward,
+                string.IsNullOrEmpty(formLootTable) ? null : formLootTable,
+                string.IsNullOrEmpty(formActiveSeasons) ? null : formActiveSeasons,
+                string.IsNullOrEmpty(formAbilities) ? null : formAbilities,
+                formIsActive
+            );
+            var result = await AdminApi.CreateEnemyAsync(dto);
+            if (result == null) errorMessage = "Failed to create enemy.";
+        }
+        else
+        {
+            var dto = new UpdateEnemyDto(
+                formName, formDescription, formImageUrl,
+                formStrength, formAgility, formIntelligence, formEndurance, formHealth,
+                formDifficultyTier, formEnemyType,
+                formExperienceReward, formGoldReward, formReputationReward,
+                string.IsNullOrEmpty(formLootTable) ? null : formLootTable,
+                string.IsNullOrEmpty(formActiveSeasons) ? null : formActiveSeasons,
+                string.IsNullOrEmpty(formAbilities) ? null : formAbilities,
+                formIsActive
+            );
+            var result = await AdminApi.UpdateEnemyAsync(editingEnemy.Id, dto);
+            if (result == null) errorMessage = "Failed to update enemy.";
+        }
+
+        isSaving = false;
+
+        if (string.IsNullOrEmpty(errorMessage))
+        {
+            CloseModal();
+            await LoadEnemies();
+        }
+    }
+
+    private void ShowDeleteConfirm(AdminEnemyDto enemy)
+    {
+        deletingEnemy = enemy;
+        showDeleteConfirm = true;
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        showDeleteConfirm = false;
+        deletingEnemy = null;
+    }
+
+    private async Task DeleteEnemy()
+    {
+        if (deletingEnemy == null) return;
+
+        var success = await AdminApi.DeleteEnemyAsync(deletingEnemy.Id);
+        CloseDeleteConfirm();
+        if (success)
+        {
+            await LoadEnemies();
+        }
+    }
+}

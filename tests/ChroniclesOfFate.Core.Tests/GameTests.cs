@@ -12,13 +12,15 @@ public class BattleServiceTests
 {
     private readonly Mock<IUnitOfWork> _mockUnitOfWork;
     private readonly Mock<IRandomService> _mockRandom;
+    private readonly Mock<IProgressionService> _mockProgression;
     private readonly BattleService _battleService;
 
     public BattleServiceTests()
     {
         _mockUnitOfWork = new Mock<IUnitOfWork>();
         _mockRandom = new Mock<IRandomService>();
-        _battleService = new BattleService(_mockUnitOfWork.Object, _mockRandom.Object);
+        _mockProgression = new Mock<IProgressionService>();
+        _battleService = new BattleService(_mockUnitOfWork.Object, _mockRandom.Object, _mockProgression.Object);
     }
 
     [Theory]

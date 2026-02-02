@@ -12,11 +12,13 @@ public class BattleService : IBattleService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IRandomService _random;
+    private readonly IProgressionService _progression;
 
-    public BattleService(IUnitOfWork unitOfWork, IRandomService random)
+    public BattleService(IUnitOfWork unitOfWork, IRandomService random, IProgressionService progression)
     {
         _unitOfWork = unitOfWork;
         _random = random;
+        _progression = progression;
     }
 
     public async Task<BattleResultDto> SimulateBattleAsync(int characterId, int enemyId)
@@ -36,7 +38,8 @@ public class BattleService : IBattleService
                 "You don't have enough energy to fight!",
                 new List<BattleRoundDto>(),
                 0, 0, 0, 0, 0,
-                MapToEnemyDto(enemy)
+                MapToEnemyDto(enemy),
+                null
             );
         }
 
@@ -118,6 +121,13 @@ public class BattleService : IBattleService
         await _unitOfWork.Characters.UpdateAsync(character);
         await _unitOfWork.SaveChangesAsync();
 
+        // Check for level up after gaining XP (only on victory)
+        LevelUpResultDto? levelUp = null;
+        if (result == BattleResult.Victory)
+        {
+            levelUp = await _progression.CheckLevelUpAsync(character);
+        }
+
         return new BattleResultDto(
             result,
             narrative,
@@ -127,7 +137,8 @@ public class BattleService : IBattleService
             repGained,
             healthLost,
             battleEnergyCost,
-            MapToEnemyDto(enemy)
+            MapToEnemyDto(enemy),
+            levelUp
         );
     }
 

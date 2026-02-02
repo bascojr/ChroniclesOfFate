@@ -1,0 +1,403 @@
+@page "/admin/skills"
+@layout ChroniclesOfFate.Blazor.Shared.AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminApiService AdminApi
+@using ChroniclesOfFate.Core.Enums
+
+<PageTitle>Skills - Admin</PageTitle>
+
+<div class="admin-table-container">
+    <div class="admin-table-header">
+        <h2>Skills</h2>
+        <button class="btn-create" @onclick="ShowCreateModal">+ New Skill</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="admin-loading">Loading skills...</div>
+    }
+    else
+    {
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Rarity</th>
+                    <th>Effect</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var skill in skills)
+                {
+                    <tr>
+                        <td>@skill.Name</td>
+                        <td>@skill.SkillType</td>
+                        <td>
+                            <span class="badge badge-@skill.Rarity.ToString().ToLower()">@skill.Rarity</span>
+                        </td>
+                        <td style="font-size: 0.75rem;">
+                            @GetEffectSummary(skill)
+                        </td>
+                        <td>
+                            <span class="badge @(skill.IsActive ? "badge-active" : "badge-inactive")">
+                                @(skill.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <button class="btn-edit" @onclick="() => ShowEditModal(skill)">Edit</button>
+                                <button class="btn-delete" @onclick="() => ShowDeleteConfirm(skill)">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content admin-modal" @onclick:stopPropagation>
+            <h2>@(editingSkill == null ? "Create Skill" : "Edit Skill")</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input class="form-input" @bind="formName" placeholder="Skill name" />
+                </div>
+                <div class="form-group">
+                    <label>Skill Type</label>
+                    <select @bind="formSkillType">
+                        @foreach (var type in Enum.GetValues<SkillType>())
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea @bind="formDescription" placeholder="Describe the skill..."></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Icon URL</label>
+                    <input class="form-input" @bind="formIconUrl" placeholder="https://..." />
+                </div>
+                <div class="form-group">
+                    <label>Rarity</label>
+                    <select @bind="formRarity">
+                        @foreach (var rarity in Enum.GetValues<Rarity>())
+                        {
+                            <option value="@rarity">@rarity</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @if (formSkillType == SkillType.Passive)
+            {
+                <h4 style="margin: 1rem 0 0.5rem; color: var(--info);">Passive Skill Properties</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Passive Effect</label>
+                        <select @bind="formPassiveEffect">
+                            @foreach (var effect in Enum.GetValues<PassiveEffect>())
+                            {
+                                <option value="@effect">@effect</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Passive Value (%)</label>
+                        <input class="form-input" type="number" step="0.1" @bind="formPassiveValue" />
+                    </div>
+                </div>
+            }
+
+            @if (formSkillType == SkillType.Active)
+            {
+                <h4 style="margin: 1rem 0 0.5rem; color: var(--success);">Active Skill Properties</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Trigger Chance (0.0-1.0)</label>
+                        <input class="form-input" type="number" step="0.01" @bind="formTriggerChance" />
+                    </div>
+                    <div class="form-group">
+                        <label>Base Damage</label>
+                        <input class="form-input" type="number" @bind="formBaseDamage" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Scaling Stat</label>
+                        <select @bind="formScalingStat">
+                            <option value="">None</option>
+                            @foreach (var stat in Enum.GetValues<StatType>())
+                            {
+                                <option value="@stat">@stat</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Scaling Multiplier</label>
+                        <input class="form-input" type="number" step="0.1" @bind="formScalingMultiplier" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Active Narrative</label>
+                    <input class="form-input" @bind="formActiveNarrative" placeholder="Narrative when skill triggers..." />
+                </div>
+            }
+
+            @if (formSkillType == SkillType.Bonus)
+            {
+                <h4 style="margin: 1rem 0 0.5rem; color: var(--accent-gold);">Bonus Skill Properties</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Bonus Effect</label>
+                        <select @bind="formBonusEffect">
+                            @foreach (var effect in Enum.GetValues<BonusEffect>())
+                            {
+                                <option value="@effect">@effect</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Bonus Percentage (%)</label>
+                        <input class="form-input" type="number" step="0.1" @bind="formBonusPercentage" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Bonus Flat Value</label>
+                    <input class="form-input" type="number" @bind="formBonusFlatValue" />
+                </div>
+            }
+
+            <div class="form-group form-checkbox">
+                <input type="checkbox" @bind="formIsActive" id="isActive" />
+                <label for="isActive">Active</label>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-message">@errorMessage</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn-primary" @onclick="SaveSkill" disabled="@isSaving">
+                    @(isSaving ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDeleteConfirm)
+{
+    <div class="modal-overlay" @onclick="CloseDeleteConfirm">
+        <div class="modal-content" @onclick:stopPropagation>
+            <div class="confirm-dialog">
+                <h2>Delete Skill</h2>
+                <p>Are you sure you want to delete "@deletingSkill?.Name"? This action cannot be undone.</p>
+                <div class="confirm-actions">
+                    <button class="btn-cancel" @onclick="CloseDeleteConfirm">Cancel</button>
+                    <button class="btn-confirm-delete" @onclick="DeleteSkill">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AdminSkillDto> skills = new();
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool showDeleteConfirm = false;
+    private bool isSaving = false;
+    private string errorMessage = "";
+
+    private AdminSkillDto? editingSkill;
+    private AdminSkillDto? deletingSkill;
+
+    // Form fields
+    private string formName = "";
+    private string formDescription = "";
+    private string formIconUrl = "";
+    private SkillType formSkillType = SkillType.Passive;
+    private Rarity formRarity = Rarity.Common;
+    private PassiveEffect formPassiveEffect = PassiveEffect.Evasion;
+    private double formPassiveValue = 10;
+    private double formTriggerChance = 0.2;
+    private int formBaseDamage = 20;
+    private string formScalingStat = "";
+    private double formScalingMultiplier = 0.5;
+    private string formActiveNarrative = "";
+    private BonusEffect formBonusEffect = BonusEffect.GoldGain;
+    private double formBonusPercentage = 10;
+    private int formBonusFlatValue = 0;
+    private bool formIsActive = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSkills();
+    }
+
+    private async Task LoadSkills()
+    {
+        isLoading = true;
+        skills = await AdminApi.GetAllSkillsAsync();
+        isLoading = false;
+    }
+
+    private string GetEffectSummary(AdminSkillDto skill)
+    {
+        return skill.SkillType switch
+        {
+            SkillType.Passive => $"{skill.PassiveEffect}: {skill.PassiveValue}%",
+            SkillType.Active => $"{skill.TriggerChance * 100:0}% chance, {skill.BaseDamage} dmg",
+            SkillType.Bonus => $"{skill.BonusEffect}: +{skill.BonusPercentage}%",
+            _ => ""
+        };
+    }
+
+    private void ShowCreateModal()
+    {
+        editingSkill = null;
+        ResetForm();
+        showModal = true;
+    }
+
+    private void ShowEditModal(AdminSkillDto skill)
+    {
+        editingSkill = skill;
+        formName = skill.Name;
+        formDescription = skill.Description;
+        formIconUrl = skill.IconUrl;
+        formSkillType = skill.SkillType;
+        formRarity = skill.Rarity;
+        formPassiveEffect = skill.PassiveEffect ?? PassiveEffect.Evasion;
+        formPassiveValue = skill.PassiveValue;
+        formTriggerChance = skill.TriggerChance;
+        formBaseDamage = skill.BaseDamage;
+        formScalingStat = skill.ScalingStat?.ToString() ?? "";
+        formScalingMultiplier = skill.ScalingMultiplier;
+        formActiveNarrative = skill.ActiveNarrative ?? "";
+        formBonusEffect = skill.BonusEffect ?? BonusEffect.GoldGain;
+        formBonusPercentage = skill.BonusPercentage;
+        formBonusFlatValue = skill.BonusFlatValue;
+        formIsActive = skill.IsActive;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        errorMessage = "";
+    }
+
+    private void ResetForm()
+    {
+        formName = "";
+        formDescription = "";
+        formIconUrl = "";
+        formSkillType = SkillType.Passive;
+        formRarity = Rarity.Common;
+        formPassiveEffect = PassiveEffect.Evasion;
+        formPassiveValue = 10;
+        formTriggerChance = 0.2;
+        formBaseDamage = 20;
+        formScalingStat = "";
+        formScalingMultiplier = 0.5;
+        formActiveNarrative = "";
+        formBonusEffect = BonusEffect.GoldGain;
+        formBonusPercentage = 10;
+        formBonusFlatValue = 0;
+        formIsActive = true;
+    }
+
+    private async Task SaveSkill()
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+        {
+            errorMessage = "Name is required.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = "";
+
+        PassiveEffect? passiveEffect = formSkillType == SkillType.Passive ? formPassiveEffect : null;
+        StatType? scalingStat = string.IsNullOrEmpty(formScalingStat) ? null : Enum.Parse<StatType>(formScalingStat);
+        BonusEffect? bonusEffect = formSkillType == SkillType.Bonus ? formBonusEffect : null;
+
+        if (editingSkill == null)
+        {
+            var dto = new CreateSkillDto(
+                formName, formDescription, formIconUrl,
+                formSkillType, formRarity,
+                passiveEffect, formPassiveValue,
+                formTriggerChance, formBaseDamage, scalingStat, formScalingMultiplier,
+                string.IsNullOrEmpty(formActiveNarrative) ? null : formActiveNarrative,
+                bonusEffect, formBonusPercentage, formBonusFlatValue,
+                formIsActive
+            );
+            var result = await AdminApi.CreateSkillAsync(dto);
+            if (result == null) errorMessage = "Failed to create skill.";
+        }
+        else
+        {
+            var dto = new UpdateSkillDto(
+                formName, formDescription, formIconUrl,
+                formSkillType, formRarity,
+                passiveEffect, formPassiveValue,
+                formTriggerChance, formBaseDamage, scalingStat, formScalingMultiplier,
+                string.IsNullOrEmpty(formActiveNarrative) ? null : formActiveNarrative,
+                bonusEffect, formBonusPercentage, formBonusFlatValue,
+                formIsActive
+            );
+            var result = await AdminApi.UpdateSkillAsync(editingSkill.Id, dto);
+            if (result == null) errorMessage = "Failed to update skill.";
+        }
+
+        isSaving = false;
+
+        if (string.IsNullOrEmpty(errorMessage))
+        {
+            CloseModal();
+            await LoadSkills();
+        }
+    }
+
+    private void ShowDeleteConfirm(AdminSkillDto skill)
+    {
+        deletingSkill = skill;
+        showDeleteConfirm = true;
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        showDeleteConfirm = false;
+        deletingSkill = null;
+    }
+
+    private async Task DeleteSkill()
+    {
+        if (deletingSkill == null) return;
+
+        var success = await AdminApi.DeleteSkillAsync(deletingSkill.Id);
+        CloseDeleteConfirm();
+        if (success)
+        {
+            await LoadSkills();
+        }
+    }
+}

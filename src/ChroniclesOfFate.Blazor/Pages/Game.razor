@@ -40,9 +40,30 @@
                 <div class="stat-row"><span>CHA</span><div class="stat-bar"><div style="width:@(gameState.Character.Charisma/5)%;background:#f39c12"></div></div><span>@gameState.Character.Charisma</span></div>
                 <div class="stat-row"><span>LCK</span><div class="stat-bar"><div style="width:@(gameState.Character.Luck/5)%;background:#1abc9c"></div></div><span>@gameState.Character.Luck</span></div>
 
-                <div class="resources">
-                    <div class="resource"><span>⚡ Energy</span><span>@gameState.Character.CurrentEnergy / @gameState.Character.MaxEnergy</span></div>
-                    <div class="resource"><span>❤️ Health</span><span>@gameState.Character.CurrentHealth / @gameState.Character.MaxHealth</span></div>
+                <div class="resource-bars">
+                    <div class="resource-bar-container">
+                        <div class="resource-bar-header">
+                            <span class="resource-label">❤️ Health</span>
+                            <span class="resource-value">@gameState.Character.CurrentHealth / @gameState.Character.MaxHealth</span>
+                        </div>
+                        <div class="resource-bar"><div style="width:@(GetHealthPercent())%;background:linear-gradient(90deg, #c0392b, #e74c3c)"></div></div>
+                    </div>
+                    <div class="resource-bar-container">
+                        <div class="resource-bar-header">
+                            <span class="resource-label">⚡ Energy</span>
+                            <span class="resource-value">@gameState.Character.CurrentEnergy / @gameState.Character.MaxEnergy</span>
+                        </div>
+                        <div class="resource-bar"><div style="width:@(GetEnergyPercent())%;background:linear-gradient(90deg, #f39c12, #f1c40f)"></div></div>
+                    </div>
+                    <div class="resource-bar-container">
+                        <div class="resource-bar-header">
+                            <span class="resource-label">✨ XP</span>
+                            <span class="resource-value">@GetXpDisplayText()</span>
+                        </div>
+                        <div class="resource-bar"><div style="width:@(GetXpPercent())%;background:linear-gradient(90deg, #8e44ad, #9b59b6)"></div></div>
+                    </div>
+                </div>
+                <div class="resources-secondary">
                     <div class="resource"><span>💰 Gold</span><span>@gameState.Character.Gold</span></div>
                     <div class="resource"><span>⭐ Rep</span><span>@gameState.Character.Reputation</span></div>
                 </div>
@@ -590,6 +611,54 @@
     }
 
     private string GetSeasonIcon(Season s) => s switch { Season.Spring => "🌸", Season.Summer => "☀️", Season.Autumn => "🍂", Season.Winter => "❄️", _ => "🌍" };
+
+    private int GetHealthPercent()
+    {
+        if (gameState?.Character == null || gameState.Character.MaxHealth == 0) return 0;
+        return (int)((double)gameState.Character.CurrentHealth / gameState.Character.MaxHealth * 100);
+    }
+
+    private int GetEnergyPercent()
+    {
+        if (gameState?.Character == null || gameState.Character.MaxEnergy == 0) return 0;
+        return (int)((double)gameState.Character.CurrentEnergy / gameState.Character.MaxEnergy * 100);
+    }
+
+    private int GetXpPercent()
+    {
+        if (gameState?.Character == null) return 0;
+        if (gameState.Character.IsMaxLevel) return 100;
+
+        int currentLevel = gameState.Character.Level;
+        // Level 1 starts at 0 XP, higher levels start at their threshold
+        int currentLevelXp = currentLevel == 1 ? 0 : currentLevel * currentLevel * 50;
+        int nextLevelXp = gameState.Character.ExperienceForNextLevel;
+        int currentXp = gameState.Character.Experience;
+
+        if (nextLevelXp <= currentLevelXp) return 100;
+
+        int xpIntoLevel = currentXp - currentLevelXp;
+        int xpNeededForLevel = nextLevelXp - currentLevelXp;
+
+        return Math.Clamp((int)((double)xpIntoLevel / xpNeededForLevel * 100), 0, 100);
+    }
+
+    private string GetXpDisplayText()
+    {
+        if (gameState?.Character == null) return "0";
+        if (gameState.Character.IsMaxLevel) return "MAX LEVEL";
+
+        int currentLevel = gameState.Character.Level;
+        // Level 1 starts at 0 XP, higher levels start at their threshold
+        int currentLevelXp = currentLevel == 1 ? 0 : currentLevel * currentLevel * 50;
+        int nextLevelXp = gameState.Character.ExperienceForNextLevel;
+        int currentXp = gameState.Character.Experience;
+
+        int xpIntoLevel = currentXp - currentLevelXp;
+        int xpNeededForLevel = nextLevelXp - currentLevelXp;
+
+        return $"{xpIntoLevel} / {xpNeededForLevel}";
+    }
 
     private string GetPassiveEffectText(SkillDto skill)
     {

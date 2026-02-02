@@ -136,6 +136,64 @@ public interface IProgressionService
 {
     Task<int> CalculateFinalScoreAsync(Character character);
     Task<string> DetermineEndingAsync(Character character);
-    Task<bool> CheckLevelUpAsync(Character character);
+    Task<LevelUpResultDto?> CheckLevelUpAsync(Character character);
     int GetExperienceForLevel(int level);
+    int GetExperienceForNextLevel(int currentLevel);
+}
+
+/// <summary>
+/// Admin backoffice service for managing reference data
+/// </summary>
+public interface IAdminService
+{
+    // Dashboard
+    Task<AdminDashboardDto> GetDashboardAsync();
+
+    // Lookups for dropdowns
+    Task<IEnumerable<LookupDto>> GetStorybookLookupAsync();
+    Task<IEnumerable<LookupDto>> GetSkillLookupAsync();
+    Task<IEnumerable<LookupDto>> GetEnemyLookupAsync();
+    Task<IEnumerable<LookupDto>> GetRandomEventLookupAsync();
+
+    // Training Scenarios
+    Task<IEnumerable<AdminTrainingScenarioDto>> GetAllTrainingScenariosAsync();
+    Task<AdminTrainingScenarioDto?> GetTrainingScenarioAsync(int id);
+    Task<AdminTrainingScenarioDto> CreateTrainingScenarioAsync(CreateTrainingScenarioDto dto);
+    Task<AdminTrainingScenarioDto?> UpdateTrainingScenarioAsync(int id, UpdateTrainingScenarioDto dto);
+    Task<bool> DeleteTrainingScenarioAsync(int id);
+
+    // Enemies
+    Task<IEnumerable<AdminEnemyDto>> GetAllEnemiesAsync();
+    Task<AdminEnemyDto?> GetEnemyAsync(int id);
+    Task<AdminEnemyDto> CreateEnemyAsync(CreateEnemyDto dto);
+    Task<AdminEnemyDto?> UpdateEnemyAsync(int id, UpdateEnemyDto dto);
+    Task<bool> DeleteEnemyAsync(int id);
+
+    // Storybooks
+    Task<IEnumerable<AdminStorybookDto>> GetAllStorybooksAsync();
+    Task<AdminStorybookDto?> GetStorybookAsync(int id);
+    Task<AdminStorybookDto> CreateStorybookAsync(CreateStorybookDto dto);
+    Task<AdminStorybookDto?> UpdateStorybookAsync(int id, UpdateStorybookDto dto);
+    Task<bool> DeleteStorybookAsync(int id);
+
+    // Random Events
+    Task<IEnumerable<AdminRandomEventDto>> GetAllRandomEventsAsync();
+    Task<AdminRandomEventDto?> GetRandomEventAsync(int id);
+    Task<AdminRandomEventDto> CreateRandomEventAsync(CreateRandomEventDto dto);
+    Task<AdminRandomEventDto?> UpdateRandomEventAsync(int id, UpdateRandomEventDto dto);
+    Task<bool> DeleteRandomEventAsync(int id);
+
+    // Event Choices
+    Task<IEnumerable<AdminEventChoiceDto>> GetEventChoicesAsync(int eventId);
+    Task<AdminEventChoiceDto?> GetEventChoiceAsync(int id);
+    Task<AdminEventChoiceDto> CreateEventChoiceAsync(CreateEventChoiceDto dto);
+    Task<AdminEventChoiceDto?> UpdateEventChoiceAsync(int id, UpdateEventChoiceDto dto);
+    Task<bool> DeleteEventChoiceAsync(int id);
+
+    // Skills
+    Task<IEnumerable<AdminSkillDto>> GetAllSkillsAsync();
+    Task<AdminSkillDto?> GetSkillAsync(int id);
+    Task<AdminSkillDto> CreateSkillAsync(CreateSkillDto dto);
+    Task<AdminSkillDto?> UpdateSkillAsync(int id, UpdateSkillDto dto);
+    Task<bool> DeleteSkillAsync(int id);
 }

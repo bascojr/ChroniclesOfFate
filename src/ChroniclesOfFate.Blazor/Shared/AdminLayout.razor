@@ -1,0 +1,60 @@
+@inherits LayoutComponentBase
+@attribute [Authorize(Roles = "Admin")]
+
+<div class="admin-container">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h2>Admin Panel</h2>
+        </div>
+        <nav class="admin-nav">
+            <NavLink href="/admin" Match="NavLinkMatch.All" class="admin-nav-link">
+                <span class="nav-icon">~</span>Dashboard
+            </NavLink>
+            <NavLink href="/admin/training" class="admin-nav-link">
+                <span class="nav-icon">+</span>Training Scenarios
+            </NavLink>
+            <NavLink href="/admin/enemies" class="admin-nav-link">
+                <span class="nav-icon">!</span>Enemies
+            </NavLink>
+            <NavLink href="/admin/storybooks" class="admin-nav-link">
+                <span class="nav-icon">#</span>Storybooks
+            </NavLink>
+            <NavLink href="/admin/events" class="admin-nav-link">
+                <span class="nav-icon">?</span>Random Events
+            </NavLink>
+            <NavLink href="/admin/skills" class="admin-nav-link">
+                <span class="nav-icon">*</span>Skills
+            </NavLink>
+        </nav>
+        <div class="admin-sidebar-footer">
+            <a href="/" class="admin-nav-link back-link">
+                <span class="nav-icon">&lt;</span>Back to Game
+            </a>
+        </div>
+    </aside>
+
+    <main class="admin-main">
+        <header class="admin-header">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="admin-user">Logged in as: @context.User.Identity?.Name</span>
+                    <button class="btn-logout" @onclick="Logout">Logout</button>
+                </Authorized>
+            </AuthorizeView>
+        </header>
+        <div class="admin-content">
+            @Body
+        </div>
+    </main>
+</div>
+
+@code {
+    [Inject] private ChroniclesOfFate.Blazor.Services.IAuthService AuthService { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/");
+    }
+}

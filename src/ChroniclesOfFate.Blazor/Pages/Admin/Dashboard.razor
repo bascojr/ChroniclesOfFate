@@ -1,0 +1,70 @@
+@page "/admin"
+@layout ChroniclesOfFate.Blazor.Shared.AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminApiService AdminApi
+
+<PageTitle>Admin Dashboard - Chronicles of Fate</PageTitle>
+
+<h1>Dashboard</h1>
+
+@if (isLoading)
+{
+    <div class="admin-loading">Loading dashboard...</div>
+}
+else if (dashboard != null)
+{
+    <div class="dashboard-grid">
+        <div class="dashboard-card training">
+            <h3>Training Scenarios</h3>
+            <div class="count">@dashboard.TotalTrainingScenarios</div>
+        </div>
+        <div class="dashboard-card enemies">
+            <h3>Enemies</h3>
+            <div class="count">@dashboard.TotalEnemies</div>
+        </div>
+        <div class="dashboard-card storybooks">
+            <h3>Storybooks</h3>
+            <div class="count">@dashboard.TotalStorybooks</div>
+        </div>
+        <div class="dashboard-card events">
+            <h3>Random Events</h3>
+            <div class="count">@dashboard.TotalRandomEvents</div>
+        </div>
+        <div class="dashboard-card skills">
+            <h3>Skills</h3>
+            <div class="count">@dashboard.TotalSkills</div>
+        </div>
+        <div class="dashboard-card users">
+            <h3>Users</h3>
+            <div class="count">@dashboard.TotalUsers</div>
+        </div>
+        <div class="dashboard-card sessions">
+            <h3>Game Sessions</h3>
+            <div class="count">@dashboard.TotalGameSessions</div>
+        </div>
+    </div>
+
+    <h2 style="margin-bottom: 1rem;">Quick Actions</h2>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="/admin/training" class="btn-create">Manage Training</a>
+        <a href="/admin/enemies" class="btn-create">Manage Enemies</a>
+        <a href="/admin/storybooks" class="btn-create">Manage Storybooks</a>
+        <a href="/admin/events" class="btn-create">Manage Events</a>
+        <a href="/admin/skills" class="btn-create">Manage Skills</a>
+    </div>
+}
+else
+{
+    <div class="error-message">Failed to load dashboard data.</div>
+}
+
+@code {
+    private AdminDashboardDto? dashboard;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        dashboard = await AdminApi.GetDashboardAsync();
+        isLoading = false;
+    }
+}

@@ -30,6 +30,7 @@ builder.Services.AddScoped<IBattleService, BattleService>();
 builder.Services.AddScoped<IStorybookService, StorybookService>();
 builder.Services.AddScoped<IProgressionService, ProgressionService>();
 builder.Services.AddSingleton<IRandomService, RandomService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 
 // Add JWT Authentication
 builder.Services.AddAuthentication(options =>
@@ -53,7 +54,11 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin"));
+});
 
 // Add Controllers
 builder.Services.AddControllers();

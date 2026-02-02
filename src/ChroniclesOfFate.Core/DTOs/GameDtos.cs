@@ -50,7 +50,9 @@ public record CharacterDto(
     Season CurrentSeason,
     int TotalPower,
     bool IsGameComplete,
-    List<StorybookDto> EquippedStorybooks
+    List<StorybookDto> EquippedStorybooks,
+    int ExperienceForNextLevel,
+    bool IsMaxLevel
 );
 
 public record CharacterStatsDto(
@@ -160,7 +162,8 @@ public record TrainingResultDto(
     bool FailureOccurred,
     int EnergySpent,
     int ExperienceGained,
-    List<StatChangeDto> StatChanges
+    List<StatChangeDto> StatChanges,
+    LevelUpResultDto? LevelUp
 );
 
 // ============ Random Event DTOs ============
@@ -221,7 +224,8 @@ public record BattleResultDto(
     int ReputationGained,
     int HealthLost,
     int EnergySpent,
-    EnemyDto Enemy
+    EnemyDto Enemy,
+    LevelUpResultDto? LevelUp
 );
 
 public record BattleRoundDto(
@@ -333,4 +337,16 @@ public record SkillTriggerResultDto(
     string Narrative,
     int DamageDealt,
     int HealingDone
+);
+
+// ============ Level Up DTOs ============
+
+public record LevelUpResultDto(
+    int OldLevel,
+    int NewLevel,
+    int OldMaxHealth,
+    int NewMaxHealth,
+    int OldMaxEnergy,
+    int NewMaxEnergy,
+    int ExperienceForNextLevel
 );

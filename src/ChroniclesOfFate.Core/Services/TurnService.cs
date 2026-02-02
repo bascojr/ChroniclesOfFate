@@ -10,6 +10,7 @@ namespace ChroniclesOfFate.Core.Services;
 /// </summary>
 public class TurnService : ITurnService
 {
+    private const int MaxLevel = 50;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITrainingService _trainingService;
     private readonly IRandomEventService _eventService;
@@ -722,6 +723,9 @@ public class TurnService : ITurnService
                     ?? new List<StorybookEventSummaryDto>()
             )).ToList() ?? new List<StorybookDto>();
 
+        int expForNext = c.Level >= MaxLevel ? 0
+            : (c.Level + 1) * (c.Level + 1) * 50;
+
         return new CharacterDto(
             c.Id,
             c.Name,
@@ -746,7 +750,9 @@ public class TurnService : ITurnService
             c.CurrentSeason,
             c.TotalPower,
             c.IsGameComplete,
-            storybooks
+            storybooks,
+            expForNext,
+            c.Level >= MaxLevel
         );
     }
 }

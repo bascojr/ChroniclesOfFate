@@ -1,6 +1,7 @@
 using ChroniclesOfFate.Core.Entities;
 using ChroniclesOfFate.Core.Enums;
 using ChroniclesOfFate.Infrastructure.Data;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,6 +18,12 @@ public static class DataSeeder
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         await context.Database.MigrateAsync();
+
+        // Seed admin user first
+        if (!await context.Users.AnyAsync(u => u.Role == "Admin"))
+        {
+            await SeedAdminUserAsync(context);
+        }
 
         if (!await context.TrainingScenarios.AnyAsync())
         {
@@ -188,6 +195,21 @@ public static class DataSeeder
                     break;
             }
         }
+    }
+
+    private static async Task SeedAdminUserAsync(ApplicationDbContext context)
+    {
+        var passwordHasher = new PasswordHasher<User>();
+        var adminUser = new User
+        {
+            Username = "admin",
+            Email = "admin@chroniclesoffate.com",
+            Role = "Admin"
+        };
+        adminUser.PasswordHash = passwordHasher.HashPassword(adminUser, "Admin123!");
+
+        context.Users.Add(adminUser);
+        await context.SaveChangesAsync();
     }
 
     private static async Task SeedTrainingScenariosAsync(ApplicationDbContext context)

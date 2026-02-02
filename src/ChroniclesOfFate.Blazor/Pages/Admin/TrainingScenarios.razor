@@ -1,0 +1,407 @@
+@page "/admin/training"
+@layout ChroniclesOfFate.Blazor.Shared.AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminApiService AdminApi
+@using ChroniclesOfFate.Core.Enums
+
+<PageTitle>Training Scenarios - Admin</PageTitle>
+
+<div class="admin-table-container">
+    <div class="admin-table-header">
+        <h2>Training Scenarios</h2>
+        <button class="btn-create" @onclick="ShowCreateModal">+ New Scenario</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="admin-loading">Loading training scenarios...</div>
+    }
+    else
+    {
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Primary Stat</th>
+                    <th>Gain</th>
+                    <th>Energy</th>
+                    <th>Level</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var scenario in scenarios)
+                {
+                    <tr>
+                        <td>@scenario.Name</td>
+                        <td>@scenario.PrimaryStat</td>
+                        <td>+@scenario.BaseStatGain</td>
+                        <td>@scenario.EnergyCost</td>
+                        <td>@scenario.RequiredLevel</td>
+                        <td>
+                            <span class="badge @(scenario.IsActive ? "badge-active" : "badge-inactive")">
+                                @(scenario.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <button class="btn-edit" @onclick="() => ShowEditModal(scenario)">Edit</button>
+                                <button class="btn-delete" @onclick="() => ShowDeleteConfirm(scenario)">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content admin-modal" @onclick:stopPropagation>
+            <h2>@(editingScenario == null ? "Create Training Scenario" : "Edit Training Scenario")</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input class="form-input" @bind="formName" placeholder="Scenario name" />
+                </div>
+                <div class="form-group">
+                    <label>Required Level</label>
+                    <input class="form-input" type="number" @bind="formRequiredLevel" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea @bind="formDescription" placeholder="Describe the training..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Image URL</label>
+                <input class="form-input" @bind="formImageUrl" placeholder="https://..." />
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Primary Stat</label>
+                    <select @bind="formPrimaryStat">
+                        @foreach (var stat in Enum.GetValues<StatType>())
+                        {
+                            <option value="@stat">@stat</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Base Stat Gain</label>
+                    <input class="form-input" type="number" @bind="formBaseStatGain" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Secondary Stat (Optional)</label>
+                    <select @bind="formSecondaryStat">
+                        <option value="">None</option>
+                        @foreach (var stat in Enum.GetValues<StatType>())
+                        {
+                            <option value="@stat">@stat</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Secondary Gain</label>
+                    <input class="form-input" type="number" @bind="formSecondaryStatGain" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Tertiary Stat (Optional)</label>
+                    <select @bind="formTertiaryStat">
+                        <option value="">None</option>
+                        @foreach (var stat in Enum.GetValues<StatType>())
+                        {
+                            <option value="@stat">@stat</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tertiary Gain</label>
+                    <input class="form-input" type="number" @bind="formTertiaryStatGain" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Energy Cost</label>
+                    <input class="form-input" type="number" @bind="formEnergyCost" />
+                </div>
+                <div class="form-group">
+                    <label>Experience Gain</label>
+                    <input class="form-input" type="number" @bind="formExperienceGain" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Bonus Chance (0.0-1.0)</label>
+                    <input class="form-input" type="number" step="0.01" @bind="formBonusChance" />
+                </div>
+                <div class="form-group">
+                    <label>Bonus Stat Gain</label>
+                    <input class="form-input" type="number" @bind="formBonusStatGain" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Failure Chance (0.0-1.0)</label>
+                    <input class="form-input" type="number" step="0.01" @bind="formFailureChance" />
+                </div>
+                <div class="form-group">
+                    <label>Failure Health Penalty</label>
+                    <input class="form-input" type="number" @bind="formFailureHealthPenalty" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Bonus Seasons (comma-separated)</label>
+                    <input class="form-input" @bind="formBonusSeasons" placeholder="Spring,Summer" />
+                </div>
+                <div class="form-group">
+                    <label>Seasonal Bonus Multiplier</label>
+                    <input class="form-input" type="number" step="0.1" @bind="formSeasonalBonusMultiplier" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Training Narrative</label>
+                <textarea @bind="formTrainingNarrative" placeholder="Narrative text shown during training..."></textarea>
+            </div>
+
+            <div class="form-group form-checkbox">
+                <input type="checkbox" @bind="formIsActive" id="isActive" />
+                <label for="isActive">Active</label>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-message">@errorMessage</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn-primary" @onclick="SaveScenario" disabled="@isSaving">
+                    @(isSaving ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDeleteConfirm)
+{
+    <div class="modal-overlay" @onclick="CloseDeleteConfirm">
+        <div class="modal-content" @onclick:stopPropagation>
+            <div class="confirm-dialog">
+                <h2>Delete Training Scenario</h2>
+                <p>Are you sure you want to delete "@deletingScenario?.Name"? This action cannot be undone.</p>
+                <div class="confirm-actions">
+                    <button class="btn-cancel" @onclick="CloseDeleteConfirm">Cancel</button>
+                    <button class="btn-confirm-delete" @onclick="DeleteScenario">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AdminTrainingScenarioDto> scenarios = new();
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool showDeleteConfirm = false;
+    private bool isSaving = false;
+    private string errorMessage = "";
+
+    private AdminTrainingScenarioDto? editingScenario;
+    private AdminTrainingScenarioDto? deletingScenario;
+
+    // Form fields
+    private string formName = "";
+    private string formDescription = "";
+    private string formImageUrl = "";
+    private StatType formPrimaryStat = StatType.Strength;
+    private string formSecondaryStat = "";
+    private string formTertiaryStat = "";
+    private int formBaseStatGain = 5;
+    private int formSecondaryStatGain = 2;
+    private int formTertiaryStatGain = 1;
+    private int formEnergyCost = 15;
+    private double formBonusChance = 0.15;
+    private int formBonusStatGain = 3;
+    private double formFailureChance = 0.05;
+    private int formFailureHealthPenalty = 8;
+    private string formBonusSeasons = "";
+    private double formSeasonalBonusMultiplier = 1.2;
+    private int formExperienceGain = 15;
+    private int formRequiredLevel = 1;
+    private string formTrainingNarrative = "";
+    private bool formIsActive = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadScenarios();
+    }
+
+    private async Task LoadScenarios()
+    {
+        isLoading = true;
+        scenarios = await AdminApi.GetAllTrainingScenariosAsync();
+        isLoading = false;
+    }
+
+    private void ShowCreateModal()
+    {
+        editingScenario = null;
+        ResetForm();
+        showModal = true;
+    }
+
+    private void ShowEditModal(AdminTrainingScenarioDto scenario)
+    {
+        editingScenario = scenario;
+        formName = scenario.Name;
+        formDescription = scenario.Description;
+        formImageUrl = scenario.ImageUrl;
+        formPrimaryStat = scenario.PrimaryStat;
+        formSecondaryStat = scenario.SecondaryStat?.ToString() ?? "";
+        formTertiaryStat = scenario.TertiaryStat?.ToString() ?? "";
+        formBaseStatGain = scenario.BaseStatGain;
+        formSecondaryStatGain = scenario.SecondaryStatGain;
+        formTertiaryStatGain = scenario.TertiaryStatGain;
+        formEnergyCost = scenario.EnergyCost;
+        formBonusChance = scenario.BonusChance;
+        formBonusStatGain = scenario.BonusStatGain;
+        formFailureChance = scenario.FailureChance;
+        formFailureHealthPenalty = scenario.FailureHealthPenalty;
+        formBonusSeasons = scenario.BonusSeasons ?? "";
+        formSeasonalBonusMultiplier = scenario.SeasonalBonusMultiplier;
+        formExperienceGain = scenario.ExperienceGain;
+        formRequiredLevel = scenario.RequiredLevel;
+        formTrainingNarrative = scenario.TrainingNarrative;
+        formIsActive = scenario.IsActive;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        errorMessage = "";
+    }
+
+    private void ResetForm()
+    {
+        formName = "";
+        formDescription = "";
+        formImageUrl = "";
+        formPrimaryStat = StatType.Strength;
+        formSecondaryStat = "";
+        formTertiaryStat = "";
+        formBaseStatGain = 5;
+        formSecondaryStatGain = 2;
+        formTertiaryStatGain = 1;
+        formEnergyCost = 15;
+        formBonusChance = 0.15;
+        formBonusStatGain = 3;
+        formFailureChance = 0.05;
+        formFailureHealthPenalty = 8;
+        formBonusSeasons = "";
+        formSeasonalBonusMultiplier = 1.2;
+        formExperienceGain = 15;
+        formRequiredLevel = 1;
+        formTrainingNarrative = "";
+        formIsActive = true;
+    }
+
+    private async Task SaveScenario()
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+        {
+            errorMessage = "Name is required.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = "";
+
+        StatType? secondaryStat = string.IsNullOrEmpty(formSecondaryStat) ? null : Enum.Parse<StatType>(formSecondaryStat);
+        StatType? tertiaryStat = string.IsNullOrEmpty(formTertiaryStat) ? null : Enum.Parse<StatType>(formTertiaryStat);
+
+        if (editingScenario == null)
+        {
+            var dto = new CreateTrainingScenarioDto(
+                formName, formDescription, formImageUrl,
+                formPrimaryStat, secondaryStat, tertiaryStat,
+                formBaseStatGain, formSecondaryStatGain, formTertiaryStatGain,
+                formEnergyCost, formBonusChance, formBonusStatGain,
+                formFailureChance, formFailureHealthPenalty,
+                string.IsNullOrEmpty(formBonusSeasons) ? null : formBonusSeasons,
+                formSeasonalBonusMultiplier, formExperienceGain, formRequiredLevel,
+                formTrainingNarrative, formIsActive
+            );
+            var result = await AdminApi.CreateTrainingScenarioAsync(dto);
+            if (result == null) errorMessage = "Failed to create scenario.";
+        }
+        else
+        {
+            var dto = new UpdateTrainingScenarioDto(
+                formName, formDescription, formImageUrl,
+                formPrimaryStat, secondaryStat, tertiaryStat,
+                formBaseStatGain, formSecondaryStatGain, formTertiaryStatGain,
+                formEnergyCost, formBonusChance, formBonusStatGain,
+                formFailureChance, formFailureHealthPenalty,
+                string.IsNullOrEmpty(formBonusSeasons) ? null : formBonusSeasons,
+                formSeasonalBonusMultiplier, formExperienceGain, formRequiredLevel,
+                formTrainingNarrative, formIsActive
+            );
+            var result = await AdminApi.UpdateTrainingScenarioAsync(editingScenario.Id, dto);
+            if (result == null) errorMessage = "Failed to update scenario.";
+        }
+
+        isSaving = false;
+
+        if (string.IsNullOrEmpty(errorMessage))
+        {
+            CloseModal();
+            await LoadScenarios();
+        }
+    }
+
+    private void ShowDeleteConfirm(AdminTrainingScenarioDto scenario)
+    {
+        deletingScenario = scenario;
+        showDeleteConfirm = true;
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        showDeleteConfirm = false;
+        deletingScenario = null;
+    }
+
+    private async Task DeleteScenario()
+    {
+        if (deletingScenario == null) return;
+
+        var success = await AdminApi.DeleteTrainingScenarioAsync(deletingScenario.Id);
+        CloseDeleteConfirm();
+        if (success)
+        {
+            await LoadScenarios();
+        }
+    }
+}

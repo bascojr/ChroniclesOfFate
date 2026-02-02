@@ -131,13 +131,18 @@ public class GameSessionService : IGameSessionService
         var storybooks = c.EquippedStorybooks?.Where(es => es.Storybook != null)
             .Select(es => MapStorybookToDto(es.Storybook!)).ToList() ?? new List<StorybookDto>();
 
+        int expForNext = c.Level >= ProgressionService.MaxLevel ? 0
+            : (c.Level + 1) * (c.Level + 1) * 50;
+
         return new CharacterDto(
             c.Id, c.Name, c.Class,
             c.Strength, c.Agility, c.Intelligence, c.Endurance, c.Charisma, c.Luck,
             c.CurrentEnergy, c.MaxEnergy, c.CurrentHealth, c.MaxHealth,
             c.Level, c.Experience, c.Gold, c.Reputation,
             c.CurrentYear, c.CurrentMonth, c.TotalTurns,
-            c.CurrentSeason, c.TotalPower, c.IsGameComplete, storybooks
+            c.CurrentSeason, c.TotalPower, c.IsGameComplete, storybooks,
+            expForNext,
+            c.Level >= ProgressionService.MaxLevel
         );
     }
 
@@ -272,13 +277,18 @@ public class CharacterService : ICharacterService
         var storybooks = c.EquippedStorybooks?.Where(es => es.Storybook != null)
             .Select(es => MapStorybookDto(es.Storybook!)).ToList() ?? new List<StorybookDto>();
 
+        int expForNext = c.Level >= ProgressionService.MaxLevel ? 0
+            : (c.Level + 1) * (c.Level + 1) * 50;
+
         return new CharacterDto(
             c.Id, c.Name, c.Class,
             c.Strength, c.Agility, c.Intelligence, c.Endurance, c.Charisma, c.Luck,
             c.CurrentEnergy, c.MaxEnergy, c.CurrentHealth, c.MaxHealth,
             c.Level, c.Experience, c.Gold, c.Reputation,
             c.CurrentYear, c.CurrentMonth, c.TotalTurns,
-            c.CurrentSeason, c.TotalPower, c.IsGameComplete, storybooks
+            c.CurrentSeason, c.TotalPower, c.IsGameComplete, storybooks,
+            expForNext,
+            c.Level >= ProgressionService.MaxLevel
         );
     }
 
@@ -426,6 +436,7 @@ public class StorybookService : IStorybookService
 
 public class ProgressionService : IProgressionService
 {
+    public const int MaxLevel = 50;
     private readonly IUnitOfWork _unitOfWork;
 
     public ProgressionService(IUnitOfWork unitOfWork)
@@ -465,24 +476,51 @@ public class ProgressionService : IProgressionService
         return Task.FromResult(ending);
     }
 
-    public async Task<bool> CheckLevelUpAsync(Character character)
+    public async Task<LevelUpResultDto?> CheckLevelUpAsync(Character character)
     {
-        int requiredExp = GetExperienceForLevel(character.Level + 1);
-        if (character.Experience < requiredExp) return false;
+        if (character.Level >= MaxLevel) return null;
 
-        character.Level++;
-        character.MaxHealth += 10;
-        character.MaxEnergy += 5;
+        int requiredExp = GetExperienceForLevel(character.Level + 1);
+        if (character.Experience < requiredExp) return null;
+
+        int oldLevel = character.Level;
+        int oldMaxHealth = character.MaxHealth;
+        int oldMaxEnergy = character.MaxEnergy;
+
+        // Allow multiple level-ups if enough XP
+        while (character.Level < MaxLevel &&
+               character.Experience >= GetExperienceForLevel(character.Level + 1))
+        {
+            character.Level++;
+            character.MaxHealth += 10;
+            character.MaxEnergy += 5;
+        }
+
         character.CurrentHealth = character.MaxHealth;
         character.CurrentEnergy = character.MaxEnergy;
 
         await _unitOfWork.Characters.UpdateAsync(character);
         await _unitOfWork.SaveChangesAsync();
-        return true;
+
+        return new LevelUpResultDto(
+            oldLevel,
+            character.Level,
+            oldMaxHealth,
+            character.MaxHealth,
+            oldMaxEnergy,
+            character.MaxEnergy,
+            GetExperienceForNextLevel(character.Level)
+        );
     }
 
     public int GetExperienceForLevel(int level)
     {
         return level * level * 50;
+    }
+
+    public int GetExperienceForNextLevel(int currentLevel)
+    {
+        if (currentLevel >= MaxLevel) return 0;
+        return GetExperienceForLevel(currentLevel + 1);
     }
 }

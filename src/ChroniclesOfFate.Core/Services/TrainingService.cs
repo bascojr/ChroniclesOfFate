@@ -12,11 +12,13 @@ public class TrainingService : ITrainingService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IRandomService _random;
+    private readonly IProgressionService _progression;
 
-    public TrainingService(IUnitOfWork unitOfWork, IRandomService random)
+    public TrainingService(IUnitOfWork unitOfWork, IRandomService random, IProgressionService progression)
     {
         _unitOfWork = unitOfWork;
         _random = random;
+        _progression = progression;
     }
 
     public async Task<IEnumerable<TrainingScenarioDto>> GetAvailableScenariosAsync(int characterId)
@@ -59,7 +61,8 @@ public class TrainingService : ITrainingService
                 false,
                 "Not enough energy to train. Rest to recover energy.",
                 0, 0, 0, false, false, 0, 0,
-                new List<StatChangeDto>()
+                new List<StatChangeDto>(),
+                null
             );
         }
 
@@ -70,7 +73,8 @@ public class TrainingService : ITrainingService
                 false,
                 $"This training requires level {scenario.RequiredLevel}. Keep growing stronger!",
                 0, 0, 0, false, false, 0, 0,
-                new List<StatChangeDto>()
+                new List<StatChangeDto>(),
+                null
             );
         }
 
@@ -101,7 +105,8 @@ public class TrainingService : ITrainingService
                 0, 0, 0, false, true,
                 scenario.EnergyCost,
                 0,
-                statChanges
+                statChanges,
+                null
             );
         }
 
@@ -187,6 +192,9 @@ public class TrainingService : ITrainingService
         await _unitOfWork.Characters.UpdateAsync(character);
         await _unitOfWork.SaveChangesAsync();
 
+        // Check for level up
+        var levelUp = await _progression.CheckLevelUpAsync(character);
+
         return new TrainingResultDto(
             true,
             string.Join(" ", narrativeParts),
@@ -197,7 +205,8 @@ public class TrainingService : ITrainingService
             false,
             scenario.EnergyCost,
             expGain,
-            statChanges
+            statChanges,
+            levelUp
         );
     }
 

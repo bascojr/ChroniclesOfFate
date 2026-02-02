@@ -26,4 +26,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // Add Game Services
 builder.Services.AddScoped<IGameApiService, GameApiService>();
 
+// Add Admin Services
+builder.Services.AddScoped<IAdminApiService, AdminApiService>();
+
 await builder.Build().RunAsync();
