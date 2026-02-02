@@ -12,7 +12,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // Configure HttpClient
 builder.Services.AddScoped(sp => new HttpClient 
 { 
-    BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7000/") 
+    BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"] ?? "https://localhost:57777/") 
 });
 
 // Add Blazored LocalStorage

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(dotnet sln:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet ef database update:*)",
+      "Bash(dotnet ef database:*)"
+    ]
+  }
+}

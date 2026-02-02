@@ -1,8 +1,10 @@
 using ChroniclesOfFate.Core.DTOs;
+using ChroniclesOfFate.Core.Entities;
 using ChroniclesOfFate.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace ChroniclesOfFate.API.Controllers;
 
@@ -17,6 +19,7 @@ public class GameController : ControllerBase
     private readonly IBattleService _battleService;
     private readonly ITrainingService _trainingService;
     private readonly IStorybookService _storybookService;
+    private readonly IUnitOfWork _unitOfWork;
 
     public GameController(
         IGameSessionService sessionService,
@@ -24,7 +27,8 @@ public class GameController : ControllerBase
         IRandomEventService eventService,
         IBattleService battleService,
         ITrainingService trainingService,
-        IStorybookService storybookService)
+        IStorybookService storybookService,
+        IUnitOfWork unitOfWork)
     {
         _sessionService = sessionService;
         _turnService = turnService;
@@ -32,6 +36,7 @@ public class GameController : ControllerBase
         _battleService = battleService;
         _trainingService = trainingService;
         _storybookService = storybookService;
+        _unitOfWork = unitOfWork;
     }
 
     private string UserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
@@ -249,11 +254,81 @@ public class GameController : ControllerBase
                 return NotFound();
 
             var result = await _storybookService.UnequipStorybookAsync(session.Character.Id, slot);
-            
+
             if (!result)
                 return BadRequest(new { message = "No storybook in that slot" });
-            
+
             return Ok(new { message = "Storybook unequipped" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // ============ Message Log ============
+
+    [HttpGet("sessions/{sessionId}/messagelog")]
+    public async Task<IActionResult> GetMessageLog(int sessionId)
+    {
+        try
+        {
+            var session = await _sessionService.GetSessionAsync(sessionId, UserId);
+            if (session == null)
+                return NotFound();
+
+            var entries = await _unitOfWork.MessageLogEntries.GetBySessionAsync(sessionId);
+            var dtos = entries.Select(e => new MessageLogEntryDto(
+                e.Id,
+                e.Message,
+                e.Type,
+                e.Year,
+                e.Month,
+                string.IsNullOrEmpty(e.StatChangesJson)
+                    ? new List<StatChangeDto>()
+                    : JsonSerializer.Deserialize<List<StatChangeDto>>(e.StatChangesJson) ?? new List<StatChangeDto>()
+            )).ToList();
+
+            return Ok(dtos);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("sessions/{sessionId}/messagelog")]
+    public async Task<IActionResult> AddMessageLog(int sessionId, [FromBody] AddMessageLogDto dto)
+    {
+        try
+        {
+            var session = await _sessionService.GetSessionAsync(sessionId, UserId);
+            if (session == null)
+                return NotFound();
+
+            var entry = new MessageLogEntry
+            {
+                GameSessionId = sessionId,
+                Message = dto.Message,
+                Type = dto.Type,
+                Year = dto.Year,
+                Month = dto.Month,
+                StatChangesJson = dto.StatChanges.Any()
+                    ? JsonSerializer.Serialize(dto.StatChanges)
+                    : null
+            };
+
+            await _unitOfWork.MessageLogEntries.AddAsync(entry);
+            await _unitOfWork.SaveChangesAsync();
+
+            return Ok(new MessageLogEntryDto(
+                entry.Id,
+                entry.Message,
+                entry.Type,
+                entry.Year,
+                entry.Month,
+                dto.StatChanges
+            ));
         }
         catch (Exception ex)
         {

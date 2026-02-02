@@ -43,7 +43,7 @@ public interface IGameSessionService
 /// </summary>
 public interface ICharacterService
 {
-    Task<CharacterDto> CreateCharacterAsync(CreateCharacterDto dto, int sessionId);
+    Task<CharacterDto> CreateCharacterAsync(CreateCharacterDto dto, int sessionId, List<int>? storybookIds = null);
     Task<CharacterDto?> GetCharacterAsync(int characterId);
     Task<CharacterDto> ApplyClassBonusesAsync(Character character);
     Task<int> CalculateFinalScoreAsync(int characterId);

@@ -82,18 +82,6 @@
                 }
                 else
                 {
-                    <div class="narrative">@(string.IsNullOrEmpty(lastNarrative) ? $"It is {gameState.SeasonInfo.Name}. What will you do?" : lastNarrative)</div>
-                    
-                    @if (lastStatChanges.Any())
-                    {
-                        <div class="stat-changes">
-                            @foreach (var c in lastStatChanges)
-                            {
-                                <span class="@(c.Change >= 0 ? "pos" : "neg")">@c.StatName: @(c.Change >= 0 ? "+" : "")@c.Change</span>
-                            }
-                        </div>
-                    }
-
                     <div class="actions">
                         <button class="train" @onclick="() => showTraining = true" disabled="@isProcessing">💪 Train</button>
                         <button class="rest" @onclick="() => ProcessAction(ActionType.Rest)" disabled="@isProcessing">🛏️ Rest</button>
@@ -131,6 +119,32 @@
                             <button class="cancel" @onclick="() => showBattle = false">Cancel</button>
                         </div>
                     }
+
+                    <div class="message-log">
+                        <h4>📜 Adventure Log</h4>
+                        @if (!messageLog.Any())
+                        {
+                            <div class="log-entry action">
+                                <span class="log-message">It is @gameState.SeasonInfo.Name. What will you do?</span>
+                            </div>
+                        }
+                        @foreach (var entry in messageLog)
+                        {
+                            <div class="log-entry @entry.Type">
+                                <span class="log-date">Y@(entry.Year) @GetMonthName(entry.Month)</span>
+                                <span class="log-message">@entry.Message</span>
+                                @if (entry.StatChanges != null && entry.StatChanges.Any())
+                                {
+                                    <div class="log-stats">
+                                        @foreach (var c in entry.StatChanges)
+                                        {
+                                            <span class="@(c.Change >= 0 ? "pos" : "neg")">@c.StatName: @(c.Change >= 0 ? "+" : "")@c.Change</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
                 }
             </div>
 
@@ -139,9 +153,42 @@
                 @for (int i = 0; i < 5; i++)
                 {
                     var book = gameState.EquippedStorybooks.ElementAtOrDefault(i);
-                    <div class="slot @(book != null ? "equipped" : "empty")">
-                        @(book?.Name ?? $"Slot {i + 1}")
-                    </div>
+                    @if (book != null)
+                    {
+                        <div class="slot equipped has-tooltip">
+                            @book.Name
+                            <div class="slot-tooltip">
+                                <h4>@book.Name</h4>
+                                <p class="tooltip-desc">@book.Description</p>
+                                <div class="tooltip-stats">
+                                    <strong>Stat Bonuses:</strong>
+                                    <div class="tooltip-bonuses">
+                                        @if (book.StrengthBonus > 0) { <span>+@book.StrengthBonus STR</span> }
+                                        @if (book.AgilityBonus > 0) { <span>+@book.AgilityBonus AGI</span> }
+                                        @if (book.IntelligenceBonus > 0) { <span>+@book.IntelligenceBonus INT</span> }
+                                        @if (book.EnduranceBonus > 0) { <span>+@book.EnduranceBonus END</span> }
+                                        @if (book.CharismaBonus > 0) { <span>+@book.CharismaBonus CHA</span> }
+                                        @if (book.LuckBonus > 0) { <span>+@book.LuckBonus LCK</span> }
+                                    </div>
+                                </div>
+                                <div class="tooltip-events">
+                                    <strong>Events (@book.Events.Count):</strong>
+                                    <ul>
+                                        @foreach (var evt in book.Events)
+                                        {
+                                            <li class="@evt.Rarity.ToString().ToLower()">
+                                                <span class="event-rarity">[@evt.Rarity]</span> @evt.Title
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="slot empty">Slot @(i + 1)</div>
+                    }
                 }
                 <h4>Season: @gameState.SeasonInfo.Name</h4>
                 @foreach (var b in gameState.SeasonInfo.Bonuses)
@@ -176,8 +223,19 @@
     private bool showTraining, showBattle;
     private List<TrainingScenarioDto> trainingScenarios = new();
     private List<EnemyDto> enemies = new();
+    private List<MessageLogEntryDto> messageLog = new();
+    private const int MaxLogEntries = 20;
 
-    protected override async Task OnInitializedAsync() => await LoadGameState();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGameState();
+        await LoadMessageLog();
+    }
+
+    private async Task LoadMessageLog()
+    {
+        messageLog = await GameApi.GetMessageLogAsync(SessionId);
+    }
 
     private async Task LoadGameState()
     {
@@ -195,19 +253,137 @@
         var result = await GameApi.ProcessTurnAsync(SessionId, action, targetId);
         if (result != null)
         {
-            lastNarrative = result.Narrative;
-            lastStatChanges = result.StatChanges;
+            // Parse narrative and mini events (mini events contain markers like (+X or (-X)
+            var (mainNarrative, miniEventNarrative) = ParseNarrativeAndMiniEvent(result.Narrative);
+            var (mainChanges, miniEventChanges) = SplitStatChanges(result.StatChanges, miniEventNarrative);
+
+            lastNarrative = mainNarrative;
+            lastStatChanges = mainChanges;
             currentEvent = result.TriggeredEvent;
             battleResult = result.BattleResult;
+
+            // Get current game date before it advances
+            int year = result.UpdatedCharacter?.CurrentYear ?? gameState?.Character.CurrentYear ?? 1;
+            int month = result.UpdatedCharacter?.CurrentMonth ?? gameState?.Character.CurrentMonth ?? 1;
+
+            // Add main action to log
+            await AddToMessageLogAsync(mainNarrative, mainChanges, "action", year, month);
+
+            // Add mini event to log if present
+            if (!string.IsNullOrEmpty(miniEventNarrative))
+            {
+                await AddToMessageLogAsync(miniEventNarrative, miniEventChanges, miniEventNarrative.Contains("(-") ? "negative" : "positive", year, month);
+            }
+
             await LoadGameState();
         }
         isProcessing = false;
     }
 
+    private (string mainNarrative, string miniEventNarrative) ParseNarrativeAndMiniEvent(string fullNarrative)
+    {
+        // Mini events contain stat change markers like (+X or (-X
+        // Look for patterns that indicate a mini event started
+        var miniEventPatterns = new[] { "A surge of", "Your reflexes", "A moment of clarity", "You feel more",
+            "Your confidence", "A fortunate", "You find a forgotten", "A grateful stranger", "You discover a small",
+            "A merchant overpays", "A refreshing breeze", "You find a moment", "A kind soul", "The beauty of nature",
+            "Word of your deeds", "A local bard", "Your good nature", "People whisper", "You reflect on",
+            "A wise traveler", "You observe something", "Experience from your",
+            "A bout of weakness", "A stumble makes", "Mental fog", "Fatigue wears", "An awkward encounter",
+            "An ill omen", "A pickpocket", "You lose some coins", "An unexpected toll", "A scam artist",
+            "The heat of the day", "Restless thoughts", "A sudden chill", "An uneasy feeling",
+            "You stub your toe", "A minor fall", "Something you ate", "A small creature" };
+
+        foreach (var pattern in miniEventPatterns)
+        {
+            int idx = fullNarrative.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
+            if (idx > 0)
+            {
+                return (fullNarrative.Substring(0, idx).Trim(), fullNarrative.Substring(idx).Trim());
+            }
+        }
+
+        return (fullNarrative, "");
+    }
+
+    private (List<StatChangeDto> mainChanges, List<StatChangeDto> miniEventChanges) SplitStatChanges(List<StatChangeDto> allChanges, string miniEventNarrative)
+    {
+        if (string.IsNullOrEmpty(miniEventNarrative))
+            return (allChanges, new List<StatChangeDto>());
+
+        var mainChanges = new List<StatChangeDto>();
+        var miniChanges = new List<StatChangeDto>();
+
+        // Mini events typically affect: a single random stat, Gold, Energy, Health, Reputation, or Experience
+        // The mini event narrative mentions the affected stat
+        foreach (var change in allChanges)
+        {
+            bool isMiniEventChange = miniEventNarrative.Contains(change.StatName, StringComparison.OrdinalIgnoreCase) ||
+                                      (miniEventNarrative.Contains("Gold") && change.StatName == "Gold") ||
+                                      (miniEventNarrative.Contains("Energy") && change.StatName == "Energy") ||
+                                      (miniEventNarrative.Contains("Health") && change.StatName == "Health") ||
+                                      (miniEventNarrative.Contains("Reputation") && change.StatName == "Reputation") ||
+                                      (miniEventNarrative.Contains("Experience") && change.StatName == "Experience");
+
+            // If the narrative mentions a stat by name (e.g., "+3 Strength"), it's a mini event change
+            if (isMiniEventChange && miniEventNarrative.Contains($"{Math.Abs(change.Change)} {change.StatName}"))
+            {
+                miniChanges.Add(change);
+            }
+            else
+            {
+                mainChanges.Add(change);
+            }
+        }
+
+        // If we couldn't split properly, just return all as main
+        if (miniChanges.Count == 0 && !string.IsNullOrEmpty(miniEventNarrative))
+        {
+            // Try to find the last change that matches the mini event type
+            var lastChange = allChanges.LastOrDefault();
+            if (lastChange != null && miniEventNarrative.Contains(lastChange.StatName, StringComparison.OrdinalIgnoreCase))
+            {
+                miniChanges.Add(lastChange);
+                mainChanges = allChanges.Take(allChanges.Count - 1).ToList();
+            }
+            else
+            {
+                mainChanges = allChanges;
+            }
+        }
+
+        return (mainChanges, miniChanges);
+    }
+
+    private async Task AddToMessageLogAsync(string message, List<StatChangeDto> statChanges, string type, int year, int month)
+    {
+        var dto = new AddMessageLogDto(message, type, year, month, statChanges);
+        var result = await GameApi.AddMessageLogAsync(SessionId, dto);
+        if (result != null)
+        {
+            messageLog.Insert(0, result);
+            if (messageLog.Count > MaxLogEntries)
+                messageLog.RemoveAt(messageLog.Count - 1);
+        }
+    }
+
+    private string GetMonthName(int month) => month switch
+    {
+        1 => "Jan", 2 => "Feb", 3 => "Mar", 4 => "Apr", 5 => "May", 6 => "Jun",
+        7 => "Jul", 8 => "Aug", 9 => "Sep", 10 => "Oct", 11 => "Nov", 12 => "Dec",
+        _ => $"M{month}"
+    };
+
     private async Task SelectChoice(EventChoiceDto choice)
     {
         if (currentEvent == null) return;
         isProcessing = true;
+
+        // Store event info before processing
+        var eventTitle = currentEvent.Title;
+        var sourceStorybook = currentEvent.SourceStorybook;
+        var eventRarity = currentEvent.Rarity;
+
         var result = await GameApi.ProcessEventChoiceAsync(SessionId, currentEvent.Id, choice.Id);
         if (result != null)
         {
@@ -215,6 +391,25 @@
             lastStatChanges = result.StatChanges;
             currentEvent = result.FollowUpEvent;
             await LoadGameState();
+
+            // Log the storybook event to message log
+            int year = gameState?.Character.CurrentYear ?? 1;
+            int month = gameState?.Character.CurrentMonth ?? 1;
+
+            string logMessage;
+            if (!string.IsNullOrEmpty(sourceStorybook))
+            {
+                logMessage = $"📖 [{sourceStorybook}] {eventTitle}: {result.ResultDescription}";
+            }
+            else
+            {
+                logMessage = $"⚡ {eventTitle}: {result.ResultDescription}";
+            }
+
+            // Determine log type based on outcome
+            string logType = result.CheckSucceeded == false ? "negative" : "positive";
+
+            await AddToMessageLogAsync(logMessage, result.StatChanges, logType, year, month);
         }
         isProcessing = false;
     }

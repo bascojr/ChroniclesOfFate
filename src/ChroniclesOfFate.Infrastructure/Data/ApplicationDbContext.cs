@@ -23,6 +23,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Enemy> Enemies => Set<Enemy>();
     public DbSet<BattleLog> BattleLogs => Set<BattleLog>();
     public DbSet<TrainingScenario> TrainingScenarios => Set<TrainingScenario>();
+    public DbSet<MessageLogEntry> MessageLogEntries => Set<MessageLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -198,6 +199,22 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.ImageUrl).HasMaxLength(500);
             entity.Property(e => e.TrainingNarrative).HasMaxLength(1000);
             entity.Property(e => e.BonusSeasons).HasMaxLength(100);
+        });
+
+        // MessageLogEntry configuration
+        modelBuilder.Entity<MessageLogEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Message).HasMaxLength(1000).IsRequired();
+            entity.Property(e => e.Type).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.StatChangesJson).HasMaxLength(1000);
+
+            entity.HasOne(e => e.GameSession)
+                .WithMany(g => g.MessageLog)
+                .HasForeignKey(e => e.GameSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.GameSessionId, e.CreatedAt });
         });
     }
 }

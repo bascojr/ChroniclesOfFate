@@ -17,6 +17,7 @@ public class GameSession
     // Relationships
     public Character? Character { get; set; }
     public ICollection<Storybook> UnlockedStorybooks { get; set; } = new List<Storybook>();
+    public ICollection<MessageLogEntry> MessageLog { get; set; } = new List<MessageLogEntry>();
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

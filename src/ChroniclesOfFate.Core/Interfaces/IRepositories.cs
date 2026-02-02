@@ -52,7 +52,6 @@ public interface ICharacterRepository : IRepository<Character>
 /// </summary>
 public interface IStorybookRepository : IRepository<Storybook>
 {
-    Task<IEnumerable<Storybook>> GetByRarityAsync(Rarity rarity);
     Task<IEnumerable<Storybook>> GetWithEventsAsync();
     Task<Storybook?> GetWithEventsAsync(int storybookId);
     Task<IEnumerable<Storybook>> GetUnlockedForSessionAsync(int sessionId);
@@ -121,6 +120,14 @@ public interface IGameEventRepository : IRepository<GameEvent>
 }
 
 /// <summary>
+/// Message log entry repository
+/// </summary>
+public interface IMessageLogEntryRepository : IRepository<MessageLogEntry>
+{
+    Task<IEnumerable<MessageLogEntry>> GetBySessionAsync(int sessionId, int limit = 20);
+}
+
+/// <summary>
 /// Unit of Work pattern for transaction management
 /// </summary>
 public interface IUnitOfWork : IDisposable
@@ -135,6 +142,7 @@ public interface IUnitOfWork : IDisposable
     IEnemyRepository Enemies { get; }
     IBattleLogRepository BattleLogs { get; }
     IGameEventRepository GameEvents { get; }
+    IMessageLogEntryRepository MessageLogEntries { get; }
     
     Task<int> SaveChangesAsync();
     Task BeginTransactionAsync();

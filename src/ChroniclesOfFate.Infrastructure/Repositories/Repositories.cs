@@ -71,10 +71,7 @@ public class CharacterRepository : Repository<Character>, ICharacterRepository
 public class StorybookRepository : Repository<Storybook>, IStorybookRepository
 {
     public StorybookRepository(ApplicationDbContext context) : base(context) { }
-    
-    public async Task<IEnumerable<Storybook>> GetByRarityAsync(Rarity rarity) =>
-        await _dbSet.Where(s => s.Rarity == rarity).ToListAsync();
-    
+
     public async Task<IEnumerable<Storybook>> GetWithEventsAsync() =>
         await _dbSet.Include(s => s.Events).ToListAsync();
     
@@ -181,15 +178,26 @@ public class BattleLogRepository : Repository<BattleLog>, IBattleLogRepository
 public class GameEventRepository : Repository<GameEvent>, IGameEventRepository
 {
     public GameEventRepository(ApplicationDbContext context) : base(context) { }
-    
+
     public async Task<IEnumerable<GameEvent>> GetByCharacterIdAsync(int characterId) =>
         await _dbSet.Where(e => e.CharacterId == characterId).Include(e => e.RandomEvent)
             .OrderByDescending(e => e.OccurredAt).ToListAsync();
-    
+
     public async Task<IEnumerable<GameEvent>> GetRecentEventsAsync(int characterId, int count) =>
         await _dbSet.Where(e => e.CharacterId == characterId).Include(e => e.RandomEvent)
             .OrderByDescending(e => e.OccurredAt).Take(count).ToListAsync();
-    
+
     public async Task<bool> HasEventOccurredAsync(int characterId, int eventId) =>
         await _dbSet.AnyAsync(e => e.CharacterId == characterId && e.RandomEventId == eventId);
+}
+
+public class MessageLogEntryRepository : Repository<MessageLogEntry>, IMessageLogEntryRepository
+{
+    public MessageLogEntryRepository(ApplicationDbContext context) : base(context) { }
+
+    public async Task<IEnumerable<MessageLogEntry>> GetBySessionAsync(int sessionId, int limit = 20) =>
+        await _dbSet.Where(m => m.GameSessionId == sessionId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
 }

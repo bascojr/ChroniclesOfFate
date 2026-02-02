@@ -22,16 +22,26 @@ public class TrainingScenario
     /// Secondary stat that may also improve
     /// </summary>
     public StatType? SecondaryStat { get; set; }
-    
+
+    /// <summary>
+    /// Tertiary stat that may also improve (for 3-stat trainings)
+    /// </summary>
+    public StatType? TertiaryStat { get; set; }
+
     /// <summary>
     /// Base stat gain for primary stat
     /// </summary>
     public int BaseStatGain { get; set; } = 5;
-    
+
     /// <summary>
     /// Base stat gain for secondary stat (if any)
     /// </summary>
     public int SecondaryStatGain { get; set; } = 2;
+
+    /// <summary>
+    /// Base stat gain for tertiary stat (if any)
+    /// </summary>
+    public int TertiaryStatGain { get; set; } = 1;
     
     /// <summary>
     /// Energy cost to perform this training

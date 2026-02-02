@@ -65,7 +65,7 @@ public record CharacterStatsDto(
 
 // ============ Game Session DTOs ============
 
-public record CreateGameSessionDto(string SessionName, CreateCharacterDto Character);
+public record CreateGameSessionDto(string SessionName, CreateCharacterDto Character, List<int>? SelectedStorybookIds = null);
 
 public record GameSessionDto(
     int Id,
@@ -95,7 +95,6 @@ public record StorybookDto(
     string Name,
     string Description,
     string IconUrl,
-    Rarity Rarity,
     string Theme,
     int StrengthBonus,
     int AgilityBonus,
@@ -103,7 +102,14 @@ public record StorybookDto(
     int EnduranceBonus,
     int CharismaBonus,
     int LuckBonus,
-    double EventTriggerChance
+    double EventTriggerChance,
+    List<StorybookEventSummaryDto> Events
+);
+
+public record StorybookEventSummaryDto(
+    string Title,
+    string Description,
+    Rarity Rarity
 );
 
 public record EquipStorybookDto(int StorybookId, int SlotPosition);
@@ -134,8 +140,10 @@ public record TrainingScenarioDto(
     string ImageUrl,
     StatType PrimaryStat,
     StatType? SecondaryStat,
+    StatType? TertiaryStat,
     int BaseStatGain,
     int SecondaryStatGain,
+    int TertiaryStatGain,
     int EnergyCost,
     double BonusChance,
     int ExperienceGain,
@@ -147,6 +155,7 @@ public record TrainingResultDto(
     string Narrative,
     int PrimaryStatGain,
     int SecondaryStatGain,
+    int TertiaryStatGain,
     bool BonusTriggered,
     bool FailureOccurred,
     int EnergySpent,
@@ -266,4 +275,23 @@ public record PlayerStatsDto(
     int TotalBattlesWon,
     int TotalEventsCompleted,
     CharacterClass FavoriteClass
+);
+
+// ============ Message Log DTOs ============
+
+public record MessageLogEntryDto(
+    int Id,
+    string Message,
+    string Type,
+    int Year,
+    int Month,
+    List<StatChangeDto> StatChanges
+);
+
+public record AddMessageLogDto(
+    string Message,
+    string Type,
+    int Year,
+    int Month,
+    List<StatChangeDto> StatChanges
 );

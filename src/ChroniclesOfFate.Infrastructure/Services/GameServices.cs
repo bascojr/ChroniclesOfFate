@@ -36,7 +36,7 @@ public class GameSessionService : IGameSessionService
         await _unitOfWork.GameSessions.AddAsync(session);
         await _unitOfWork.SaveChangesAsync();
 
-        var character = await _characterService.CreateCharacterAsync(dto.Character, session.Id);
+        var character = await _characterService.CreateCharacterAsync(dto.Character, session.Id, dto.SelectedStorybookIds);
         session = await _unitOfWork.GameSessions.GetWithCharacterAsync(session.Id);
 
         return MapToSessionDto(session!);
@@ -129,13 +129,7 @@ public class GameSessionService : IGameSessionService
     private static CharacterDto MapToCharacterDto(Character c)
     {
         var storybooks = c.EquippedStorybooks?.Where(es => es.Storybook != null)
-            .Select(es => new StorybookDto(
-                es.Storybook!.Id, es.Storybook.Name, es.Storybook.Description,
-                es.Storybook.IconUrl, es.Storybook.Rarity, es.Storybook.Theme,
-                es.Storybook.StrengthBonus, es.Storybook.AgilityBonus, es.Storybook.IntelligenceBonus,
-                es.Storybook.EnduranceBonus, es.Storybook.CharismaBonus, es.Storybook.LuckBonus,
-                es.Storybook.EventTriggerChance
-            )).ToList() ?? new List<StorybookDto>();
+            .Select(es => MapStorybookToDto(es.Storybook!)).ToList() ?? new List<StorybookDto>();
 
         return new CharacterDto(
             c.Id, c.Name, c.Class,
@@ -146,6 +140,14 @@ public class GameSessionService : IGameSessionService
             c.CurrentSeason, c.TotalPower, c.IsGameComplete, storybooks
         );
     }
+
+    private static StorybookDto MapStorybookToDto(Storybook s) => new(
+        s.Id, s.Name, s.Description, s.IconUrl, s.Theme,
+        s.StrengthBonus, s.AgilityBonus, s.IntelligenceBonus,
+        s.EnduranceBonus, s.CharismaBonus, s.LuckBonus, s.EventTriggerChance,
+        s.Events?.Select(e => new StorybookEventSummaryDto(e.Title, e.Description, e.Rarity)).ToList()
+            ?? new List<StorybookEventSummaryDto>()
+    );
 }
 
 public class CharacterService : ICharacterService
@@ -157,7 +159,7 @@ public class CharacterService : ICharacterService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<CharacterDto> CreateCharacterAsync(CreateCharacterDto dto, int sessionId)
+    public async Task<CharacterDto> CreateCharacterAsync(CreateCharacterDto dto, int sessionId, List<int>? storybookIds = null)
     {
         var character = new Character
         {
@@ -173,6 +175,38 @@ public class CharacterService : ICharacterService
 
         await _unitOfWork.Characters.AddAsync(character);
         await _unitOfWork.SaveChangesAsync();
+
+        // Equip selected storybooks and apply initial stat bonuses
+        if (storybookIds != null && storybookIds.Any())
+        {
+            var validIds = storybookIds.Take(5).ToList(); // Max 5 storybooks
+            int slot = 1;
+
+            foreach (var storybookId in validIds)
+            {
+                var storybook = await _unitOfWork.Storybooks.GetByIdAsync(storybookId);
+                if (storybook == null) continue;
+
+                // Equip the storybook
+                character.EquippedStorybooks.Add(new CharacterStorybook
+                {
+                    CharacterId = character.Id,
+                    StorybookId = storybookId,
+                    SlotPosition = slot++
+                });
+
+                // Apply initial stat bonuses from storybook (these are permanent starting boosts)
+                character.Strength += storybook.StrengthBonus;
+                character.Agility += storybook.AgilityBonus;
+                character.Intelligence += storybook.IntelligenceBonus;
+                character.Endurance += storybook.EnduranceBonus;
+                character.Charisma += storybook.CharismaBonus;
+                character.Luck += storybook.LuckBonus;
+            }
+
+            await _unitOfWork.Characters.UpdateAsync(character);
+            await _unitOfWork.SaveChangesAsync();
+        }
 
         return await ApplyClassBonusesAsync(character);
     }
@@ -236,13 +270,7 @@ public class CharacterService : ICharacterService
     private static CharacterDto MapToDto(Character c)
     {
         var storybooks = c.EquippedStorybooks?.Where(es => es.Storybook != null)
-            .Select(es => new StorybookDto(
-                es.Storybook!.Id, es.Storybook.Name, es.Storybook.Description,
-                es.Storybook.IconUrl, es.Storybook.Rarity, es.Storybook.Theme,
-                es.Storybook.StrengthBonus, es.Storybook.AgilityBonus, es.Storybook.IntelligenceBonus,
-                es.Storybook.EnduranceBonus, es.Storybook.CharismaBonus, es.Storybook.LuckBonus,
-                es.Storybook.EventTriggerChance
-            )).ToList() ?? new List<StorybookDto>();
+            .Select(es => MapStorybookDto(es.Storybook!)).ToList() ?? new List<StorybookDto>();
 
         return new CharacterDto(
             c.Id, c.Name, c.Class,
@@ -253,6 +281,14 @@ public class CharacterService : ICharacterService
             c.CurrentSeason, c.TotalPower, c.IsGameComplete, storybooks
         );
     }
+
+    private static StorybookDto MapStorybookDto(Storybook s) => new(
+        s.Id, s.Name, s.Description, s.IconUrl, s.Theme,
+        s.StrengthBonus, s.AgilityBonus, s.IntelligenceBonus,
+        s.EnduranceBonus, s.CharismaBonus, s.LuckBonus, s.EventTriggerChance,
+        s.Events?.Select(e => new StorybookEventSummaryDto(e.Title, e.Description, e.Rarity)).ToList()
+            ?? new List<StorybookEventSummaryDto>()
+    );
 }
 
 public class StorybookService : IStorybookService
@@ -266,7 +302,7 @@ public class StorybookService : IStorybookService
 
     public async Task<IEnumerable<StorybookDto>> GetAllStorybooksAsync()
     {
-        var storybooks = await _unitOfWork.Storybooks.GetAllAsync();
+        var storybooks = await _unitOfWork.Storybooks.GetWithEventsAsync();
         return storybooks.Select(MapToDto);
     }
 
@@ -275,7 +311,7 @@ public class StorybookService : IStorybookService
         var session = await _unitOfWork.GameSessions.GetFullSessionAsync(sessionId);
         if (session == null) return Enumerable.Empty<StorybookDto>();
 
-        var all = await _unitOfWork.Storybooks.GetAllAsync();
+        var all = await _unitOfWork.Storybooks.GetWithEventsAsync();
         var unlocked = all.Where(s => !s.IsUnlockable || session.UnlockedStorybooks.Any(u => u.Id == s.Id));
         return unlocked.Select(MapToDto);
     }
@@ -380,9 +416,11 @@ public class StorybookService : IStorybookService
     }
 
     private static StorybookDto MapToDto(Storybook s) => new(
-        s.Id, s.Name, s.Description, s.IconUrl, s.Rarity, s.Theme,
+        s.Id, s.Name, s.Description, s.IconUrl, s.Theme,
         s.StrengthBonus, s.AgilityBonus, s.IntelligenceBonus,
-        s.EnduranceBonus, s.CharismaBonus, s.LuckBonus, s.EventTriggerChance
+        s.EnduranceBonus, s.CharismaBonus, s.LuckBonus, s.EventTriggerChance,
+        s.Events?.Select(e => new StorybookEventSummaryDto(e.Title, e.Description, e.Rarity)).ToList()
+            ?? new List<StorybookEventSummaryDto>()
     );
 }
 

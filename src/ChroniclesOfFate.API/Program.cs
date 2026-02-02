@@ -63,7 +63,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("BlazorClient", policy =>
     {
-        policy.WithOrigins("https://localhost:7001", "http://localhost:5001")
+        policy.WithOrigins("https://localhost:57778", "http://localhost:57780")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -121,11 +121,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Ensure database is created and seeded
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.EnsureCreated();
-}
+// Ensure database is migrated and seeded
+await DataSeeder.SeedAsync(app.Services);
 
 app.Run();

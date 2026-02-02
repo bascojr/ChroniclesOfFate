@@ -12,8 +12,7 @@ public class Storybook
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string IconUrl { get; set; } = string.Empty;
-    public Rarity Rarity { get; set; }
-    
+
     /// <summary>
     /// Theme of the storybook affects which events can trigger
     /// </summary>

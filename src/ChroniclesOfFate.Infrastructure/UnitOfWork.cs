@@ -23,6 +23,7 @@ public class UnitOfWork : IUnitOfWork
     private IEnemyRepository? _enemies;
     private IBattleLogRepository? _battleLogs;
     private IGameEventRepository? _gameEvents;
+    private IMessageLogEntryRepository? _messageLogEntries;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -56,8 +57,11 @@ public class UnitOfWork : IUnitOfWork
     public IBattleLogRepository BattleLogs => 
         _battleLogs ??= new BattleLogRepository(_context);
     
-    public IGameEventRepository GameEvents => 
+    public IGameEventRepository GameEvents =>
         _gameEvents ??= new GameEventRepository(_context);
+
+    public IMessageLogEntryRepository MessageLogEntries =>
+        _messageLogEntries ??= new MessageLogEntryRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

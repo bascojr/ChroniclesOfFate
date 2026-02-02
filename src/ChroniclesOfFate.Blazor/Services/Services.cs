@@ -20,7 +20,7 @@ public interface IAuthService
 public interface IGameApiService
 {
     Task<List<GameSessionListDto>> GetSessionsAsync();
-    Task<GameSessionDto?> CreateSessionAsync(string name, string characterName, CharacterClass characterClass);
+    Task<GameSessionDto?> CreateSessionAsync(string name, string characterName, CharacterClass characterClass, List<int>? storybookIds = null);
     Task<GameStateDto?> GetGameStateAsync(int sessionId);
     Task<TurnResultDto?> ProcessTurnAsync(int sessionId, ActionType action, int? targetId = null);
     Task<EventChoiceResultDto?> ProcessEventChoiceAsync(int sessionId, int eventId, int choiceId);
@@ -28,6 +28,8 @@ public interface IGameApiService
     Task<List<EnemyDto>> GetEnemiesAsync(int sessionId);
     Task<List<StorybookDto>> GetStorybooksAsync();
     Task<bool> EquipStorybookAsync(int sessionId, int storybookId, int slot);
+    Task<List<MessageLogEntryDto>> GetMessageLogAsync(int sessionId);
+    Task<MessageLogEntryDto?> AddMessageLogAsync(int sessionId, AddMessageLogDto dto);
 }
 
 public class CustomAuthStateProvider : AuthenticationStateProvider
@@ -190,9 +192,9 @@ public class GameApiService : IGameApiService
         return result ?? new List<GameSessionListDto>();
     }
 
-    public async Task<GameSessionDto?> CreateSessionAsync(string name, string characterName, CharacterClass characterClass)
+    public async Task<GameSessionDto?> CreateSessionAsync(string name, string characterName, CharacterClass characterClass, List<int>? storybookIds = null)
     {
-        var dto = new CreateGameSessionDto(name, new CreateCharacterDto(characterName, characterClass));
+        var dto = new CreateGameSessionDto(name, new CreateCharacterDto(characterName, characterClass), storybookIds);
         var response = await _httpClient.PostAsJsonAsync("api/game/sessions", dto);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<GameSessionDto>();
@@ -248,5 +250,32 @@ public class GameApiService : IGameApiService
         var dto = new EquipStorybookDto(storybookId, slot);
         var response = await _httpClient.PostAsJsonAsync($"api/game/sessions/{sessionId}/storybooks/equip", dto);
         return response.IsSuccessStatusCode;
+    }
+
+    public async Task<List<MessageLogEntryDto>> GetMessageLogAsync(int sessionId)
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<List<MessageLogEntryDto>>($"api/game/sessions/{sessionId}/messagelog");
+            return result ?? new List<MessageLogEntryDto>();
+        }
+        catch
+        {
+            return new List<MessageLogEntryDto>();
+        }
+    }
+
+    public async Task<MessageLogEntryDto?> AddMessageLogAsync(int sessionId, AddMessageLogDto dto)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync($"api/game/sessions/{sessionId}/messagelog", dto);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<MessageLogEntryDto>();
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

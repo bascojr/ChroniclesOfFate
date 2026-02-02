@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "ChroniclesOfFate.Blazor": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:57778;http://localhost:57780"
+    }
+  }
+}

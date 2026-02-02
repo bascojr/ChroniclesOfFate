@@ -33,8 +33,10 @@ public class TrainingService : ITrainingService
             s.ImageUrl,
             s.PrimaryStat,
             s.SecondaryStat,
+            s.TertiaryStat,
             s.BaseStatGain,
             s.SecondaryStatGain,
+            s.TertiaryStatGain,
             s.EnergyCost,
             s.BonusChance,
             s.ExperienceGain,
@@ -56,7 +58,7 @@ public class TrainingService : ITrainingService
             return new TrainingResultDto(
                 false,
                 "Not enough energy to train. Rest to recover energy.",
-                0, 0, false, false, 0, 0,
+                0, 0, 0, false, false, 0, 0,
                 new List<StatChangeDto>()
             );
         }
@@ -67,7 +69,7 @@ public class TrainingService : ITrainingService
             return new TrainingResultDto(
                 false,
                 $"This training requires level {scenario.RequiredLevel}. Keep growing stronger!",
-                0, 0, false, false, 0, 0,
+                0, 0, 0, false, false, 0, 0,
                 new List<StatChangeDto>()
             );
         }
@@ -96,7 +98,7 @@ public class TrainingService : ITrainingService
             return new TrainingResultDto(
                 false,
                 string.Join(" ", narrativeParts),
-                0, 0, false, true,
+                0, 0, 0, false, true,
                 scenario.EnergyCost,
                 0,
                 statChanges
@@ -109,8 +111,9 @@ public class TrainingService : ITrainingService
         // Calculate storybook bonuses
         double storybookMultiplier = CalculateStorybookBonus(character, scenario.PrimaryStat);
 
-        // Primary stat gain
-        int primaryGain = (int)(scenario.BaseStatGain * seasonalMultiplier * storybookMultiplier);
+        // Primary stat gain with random variance (base to +25%)
+        double randomVariance = 1.0 + _random.NextDouble() * 0.25;
+        int primaryGain = (int)(scenario.BaseStatGain * seasonalMultiplier * storybookMultiplier * randomVariance);
         int oldPrimary = character.GetStat(scenario.PrimaryStat);
         character.AddStat(scenario.PrimaryStat, primaryGain);
         statChanges.Add(new StatChangeDto(
@@ -120,11 +123,12 @@ public class TrainingService : ITrainingService
             primaryGain
         ));
 
-        // Secondary stat gain (if applicable)
+        // Secondary stat gain (if applicable) with random variance
         int secondaryGain = 0;
         if (scenario.SecondaryStat.HasValue)
         {
-            secondaryGain = (int)(scenario.SecondaryStatGain * seasonalMultiplier);
+            randomVariance = 1.0 + _random.NextDouble() * 0.25;
+            secondaryGain = (int)(scenario.SecondaryStatGain * seasonalMultiplier * randomVariance);
             int oldSecondary = character.GetStat(scenario.SecondaryStat.Value);
             character.AddStat(scenario.SecondaryStat.Value, secondaryGain);
             statChanges.Add(new StatChangeDto(
@@ -132,6 +136,22 @@ public class TrainingService : ITrainingService
                 oldSecondary,
                 character.GetStat(scenario.SecondaryStat.Value),
                 secondaryGain
+            ));
+        }
+
+        // Tertiary stat gain (if applicable) with random variance
+        int tertiaryGain = 0;
+        if (scenario.TertiaryStat.HasValue)
+        {
+            randomVariance = 1.0 + _random.NextDouble() * 0.25;
+            tertiaryGain = (int)(scenario.TertiaryStatGain * seasonalMultiplier * randomVariance);
+            int oldTertiary = character.GetStat(scenario.TertiaryStat.Value);
+            character.AddStat(scenario.TertiaryStat.Value, tertiaryGain);
+            statChanges.Add(new StatChangeDto(
+                scenario.TertiaryStat.Value.ToString(),
+                oldTertiary,
+                character.GetStat(scenario.TertiaryStat.Value),
+                tertiaryGain
             ));
         }
 
@@ -143,7 +163,7 @@ public class TrainingService : ITrainingService
             int oldStat = character.GetStat(scenario.PrimaryStat);
             character.AddStat(scenario.PrimaryStat, bonusGain);
             primaryGain += bonusGain;
-            
+
             // Update the stat change entry
             var existingChange = statChanges.First(c => c.StatName == scenario.PrimaryStat.ToString());
             statChanges.Remove(existingChange);
@@ -172,6 +192,7 @@ public class TrainingService : ITrainingService
             string.Join(" ", narrativeParts),
             primaryGain,
             secondaryGain,
+            tertiaryGain,
             bonusTriggered,
             false,
             scenario.EnergyCost,

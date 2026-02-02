@@ -105,6 +105,14 @@
 
             Navigation.NavigateTo("/sessions");
         }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Unable to connect to the server. Please try again later.";
+        }
+        catch (Exception)
+        {
+            errorMessage = "An unexpected error occurred. Please try again.";
+        }
         finally
         {
             isLoading = false;
