@@ -1,0 +1,113 @@
+@page "/"
+@page "/login"
+@using ChroniclesOfFate.Blazor.Services
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="login-container">
+    <div class="login-card">
+        <h2>@(isRegistering ? "Create Account" : "Welcome Back")</h2>
+        <p class="subtitle">@(isRegistering ? "Begin your 10-year adventure" : "Continue your journey")</p>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="error-message">@errorMessage</div>
+        }
+
+        <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+            <div class="form-group">
+                <label>Username</label>
+                <InputText @bind-Value="model.Username" class="form-input" placeholder="Enter username" />
+            </div>
+
+            @if (isRegistering)
+            {
+                <div class="form-group">
+                    <label>Email</label>
+                    <InputText @bind-Value="model.Email" class="form-input" placeholder="Enter email" />
+                </div>
+            }
+
+            <div class="form-group">
+                <label>Password</label>
+                <InputText @bind-Value="model.Password" type="password" class="form-input" placeholder="Enter password" />
+            </div>
+
+            <button type="submit" class="btn-primary" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span>Loading...</span>
+                }
+                else
+                {
+                    <span>@(isRegistering ? "Create Account" : "Login")</span>
+                }
+            </button>
+        </EditForm>
+
+        <p class="toggle-mode">
+            @if (isRegistering)
+            {
+                <span>Already have an account? <a href="javascript:void(0)" @onclick="ToggleMode">Login</a></span>
+            }
+            else
+            {
+                <span>New adventurer? <a href="javascript:void(0)" @onclick="ToggleMode">Create Account</a></span>
+            }
+        </p>
+    </div>
+</div>
+
+@code {
+    private LoginModel model = new();
+    private bool isRegistering = false;
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    private class LoginModel
+    {
+        public string Username { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    private void ToggleMode()
+    {
+        isRegistering = !isRegistering;
+        errorMessage = null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            if (isRegistering)
+            {
+                var result = await AuthService.RegisterAsync(model.Username, model.Email, model.Password);
+                if (result == null)
+                {
+                    errorMessage = "Registration failed. Username or email may already exist.";
+                    return;
+                }
+            }
+            else
+            {
+                var result = await AuthService.LoginAsync(model.Username, model.Password);
+                if (result == null)
+                {
+                    errorMessage = "Invalid username or password.";
+                    return;
+                }
+            }
+
+            Navigation.NavigateTo("/sessions");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

@@ -1,0 +1,32 @@
+@inherits LayoutComponentBase
+
+<div class="game-container">
+    <header class="game-header">
+        <h1>⚔️ Chronicles of Fate</h1>
+        <AuthorizeView>
+            <Authorized>
+                <span class="user-info">Welcome, @context.User.Identity?.Name</span>
+                <button class="btn-logout" @onclick="Logout">Logout</button>
+            </Authorized>
+        </AuthorizeView>
+    </header>
+    
+    <main class="game-main">
+        @Body
+    </main>
+    
+    <footer class="game-footer">
+        <p>A 10-Year Fantasy RPG Adventure</p>
+    </footer>
+</div>
+
+@code {
+    [Inject] private ChroniclesOfFate.Blazor.Services.IAuthService AuthService { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/");
+    }
+}

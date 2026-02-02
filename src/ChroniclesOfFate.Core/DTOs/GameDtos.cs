@@ -1,0 +1,269 @@
+using ChroniclesOfFate.Core.Enums;
+
+namespace ChroniclesOfFate.Core.DTOs;
+
+// ============ Authentication DTOs ============
+
+public record LoginDto(string Username, string Password);
+
+public record RegisterDto(string Username, string Email, string Password);
+
+public record AuthResponseDto(
+    string Token,
+    string RefreshToken,
+    DateTime Expiration,
+    UserDto User
+);
+
+public record RefreshTokenDto(string Token, string RefreshToken);
+
+public record UserDto(int Id, string Username, string Email, string Role);
+
+// ============ Character DTOs ============
+
+public record CreateCharacterDto(
+    string Name,
+    CharacterClass Class
+);
+
+public record CharacterDto(
+    int Id,
+    string Name,
+    CharacterClass Class,
+    int Strength,
+    int Agility,
+    int Intelligence,
+    int Endurance,
+    int Charisma,
+    int Luck,
+    int CurrentEnergy,
+    int MaxEnergy,
+    int CurrentHealth,
+    int MaxHealth,
+    int Level,
+    int Experience,
+    int Gold,
+    int Reputation,
+    int CurrentYear,
+    int CurrentMonth,
+    int TotalTurns,
+    Season CurrentSeason,
+    int TotalPower,
+    bool IsGameComplete,
+    List<StorybookDto> EquippedStorybooks
+);
+
+public record CharacterStatsDto(
+    int Strength,
+    int Agility,
+    int Intelligence,
+    int Endurance,
+    int Charisma,
+    int Luck,
+    int TotalPower
+);
+
+// ============ Game Session DTOs ============
+
+public record CreateGameSessionDto(string SessionName, CreateCharacterDto Character);
+
+public record GameSessionDto(
+    int Id,
+    string SessionName,
+    GameState State,
+    int? FinalScore,
+    string? EndingType,
+    CharacterDto? Character,
+    DateTime CreatedAt,
+    DateTime UpdatedAt
+);
+
+public record GameSessionListDto(
+    int Id,
+    string SessionName,
+    GameState State,
+    string? CharacterName,
+    int? CharacterLevel,
+    int? TotalTurns,
+    DateTime UpdatedAt
+);
+
+// ============ Storybook DTOs ============
+
+public record StorybookDto(
+    int Id,
+    string Name,
+    string Description,
+    string IconUrl,
+    Rarity Rarity,
+    string Theme,
+    int StrengthBonus,
+    int AgilityBonus,
+    int IntelligenceBonus,
+    int EnduranceBonus,
+    int CharismaBonus,
+    int LuckBonus,
+    double EventTriggerChance
+);
+
+public record EquipStorybookDto(int StorybookId, int SlotPosition);
+
+public record LoadoutDto(List<EquipStorybookDto> Storybooks);
+
+// ============ Turn/Action DTOs ============
+
+public record TurnActionDto(ActionType Action, int? TargetId);
+
+public record TurnResultDto(
+    bool Success,
+    string Narrative,
+    List<StatChangeDto> StatChanges,
+    RandomEventDto? TriggeredEvent,
+    BattleResultDto? BattleResult,
+    CharacterDto UpdatedCharacter
+);
+
+public record StatChangeDto(string StatName, int OldValue, int NewValue, int Change);
+
+// ============ Training DTOs ============
+
+public record TrainingScenarioDto(
+    int Id,
+    string Name,
+    string Description,
+    string ImageUrl,
+    StatType PrimaryStat,
+    StatType? SecondaryStat,
+    int BaseStatGain,
+    int SecondaryStatGain,
+    int EnergyCost,
+    double BonusChance,
+    int ExperienceGain,
+    bool HasSeasonalBonus
+);
+
+public record TrainingResultDto(
+    bool Success,
+    string Narrative,
+    int PrimaryStatGain,
+    int SecondaryStatGain,
+    bool BonusTriggered,
+    bool FailureOccurred,
+    int EnergySpent,
+    int ExperienceGained,
+    List<StatChangeDto> StatChanges
+);
+
+// ============ Random Event DTOs ============
+
+public record RandomEventDto(
+    int Id,
+    string Title,
+    string Description,
+    string ImageUrl,
+    Rarity Rarity,
+    EventOutcome OutcomeType,
+    string? SourceStorybook,
+    List<EventChoiceDto> Choices
+);
+
+public record EventChoiceDto(
+    int Id,
+    string Text,
+    bool IsHidden,
+    StatType? CheckStat,
+    int CheckDifficulty,
+    string? StatRequirementHint
+);
+
+public record EventChoiceResultDto(
+    bool Success,
+    bool? CheckSucceeded,
+    int? RollResult,
+    int? CheckDifficulty,
+    string ResultDescription,
+    List<StatChangeDto> StatChanges,
+    RandomEventDto? FollowUpEvent,
+    int? TriggerBattleId
+);
+
+// ============ Battle DTOs ============
+
+public record EnemyDto(
+    int Id,
+    string Name,
+    string Description,
+    string ImageUrl,
+    int Strength,
+    int Agility,
+    int Intelligence,
+    int Endurance,
+    int Health,
+    int DifficultyTier,
+    string EnemyType
+);
+
+public record BattleResultDto(
+    BattleResult Result,
+    string Narrative,
+    List<BattleRoundDto> Rounds,
+    int ExperienceGained,
+    int GoldGained,
+    int ReputationGained,
+    int HealthLost,
+    int EnergySpent,
+    EnemyDto Enemy
+);
+
+public record BattleRoundDto(
+    int RoundNumber,
+    string PlayerAction,
+    int PlayerDamage,
+    string EnemyAction,
+    int EnemyDamage,
+    int PlayerHealthRemaining,
+    int EnemyHealthRemaining,
+    string Narrative
+);
+
+public record InitiateBattleDto(int? EnemyId);
+
+// ============ Game State DTOs ============
+
+public record GameStateDto(
+    CharacterDto Character,
+    List<TrainingScenarioDto> AvailableTraining,
+    List<StorybookDto> EquippedStorybooks,
+    List<StorybookDto> AvailableStorybooks,
+    SeasonInfoDto SeasonInfo,
+    List<string> AvailableActions
+);
+
+public record SeasonInfoDto(
+    Season Season,
+    string Name,
+    string Description,
+    List<string> Bonuses
+);
+
+// ============ Leaderboard/Stats DTOs ============
+
+public record LeaderboardEntryDto(
+    int Rank,
+    string Username,
+    string CharacterName,
+    CharacterClass Class,
+    int FinalScore,
+    int TotalPower,
+    string EndingType,
+    DateTime CompletedAt
+);
+
+public record PlayerStatsDto(
+    int TotalGamesPlayed,
+    int GamesCompleted,
+    int HighestScore,
+    int TotalBattlesWon,
+    int TotalEventsCompleted,
+    CharacterClass FavoriteClass
+);

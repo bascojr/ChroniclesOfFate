@@ -1,0 +1,223 @@
+@page "/play/{SessionId:int}"
+@attribute [Authorize]
+@using ChroniclesOfFate.Blazor.Services
+@using ChroniclesOfFate.Core.DTOs
+@using ChroniclesOfFate.Core.Enums
+@inject IGameApiService GameApi
+@inject NavigationManager Navigation
+
+<div class="game-play-container">
+    @if (isLoading)
+    {
+        <div class="loading">Loading your adventure...</div>
+    }
+    else if (gameState == null)
+    {
+        <div class="error">Failed to load game. <a href="/sessions">Return to sessions</a></div>
+    }
+    else
+    {
+        <div class="game-header-bar">
+            <div class="character-summary">
+                <h2>@gameState.Character.Name</h2>
+                <span class="class-badge">@gameState.Character.Class</span>
+                <span class="level">Level @gameState.Character.Level</span>
+            </div>
+            <div class="time-info">
+                <span class="season @gameState.SeasonInfo.Season.ToString().ToLower()">@GetSeasonIcon(gameState.SeasonInfo.Season) @gameState.SeasonInfo.Name</span>
+                <span class="date">Year @gameState.Character.CurrentYear, Month @gameState.Character.CurrentMonth</span>
+                <span class="turn">Turn @gameState.Character.TotalTurns / 120</span>
+            </div>
+        </div>
+
+        <div class="game-content">
+            <div class="stats-panel">
+                <h3>Stats</h3>
+                <div class="stat-row"><span>STR</span><div class="stat-bar"><div style="width:@(gameState.Character.Strength/5)%;background:#e74c3c"></div></div><span>@gameState.Character.Strength</span></div>
+                <div class="stat-row"><span>AGI</span><div class="stat-bar"><div style="width:@(gameState.Character.Agility/5)%;background:#3498db"></div></div><span>@gameState.Character.Agility</span></div>
+                <div class="stat-row"><span>INT</span><div class="stat-bar"><div style="width:@(gameState.Character.Intelligence/5)%;background:#9b59b6"></div></div><span>@gameState.Character.Intelligence</span></div>
+                <div class="stat-row"><span>END</span><div class="stat-bar"><div style="width:@(gameState.Character.Endurance/5)%;background:#27ae60"></div></div><span>@gameState.Character.Endurance</span></div>
+                <div class="stat-row"><span>CHA</span><div class="stat-bar"><div style="width:@(gameState.Character.Charisma/5)%;background:#f39c12"></div></div><span>@gameState.Character.Charisma</span></div>
+                <div class="stat-row"><span>LCK</span><div class="stat-bar"><div style="width:@(gameState.Character.Luck/5)%;background:#1abc9c"></div></div><span>@gameState.Character.Luck</span></div>
+
+                <div class="resources">
+                    <div class="resource"><span>⚡ Energy</span><span>@gameState.Character.CurrentEnergy / @gameState.Character.MaxEnergy</span></div>
+                    <div class="resource"><span>❤️ Health</span><span>@gameState.Character.CurrentHealth / @gameState.Character.MaxHealth</span></div>
+                    <div class="resource"><span>💰 Gold</span><span>@gameState.Character.Gold</span></div>
+                    <div class="resource"><span>⭐ Rep</span><span>@gameState.Character.Reputation</span></div>
+                </div>
+                <div class="power">Total Power: <strong>@gameState.Character.TotalPower</strong></div>
+            </div>
+
+            <div class="action-panel">
+                @if (currentEvent != null)
+                {
+                    <div class="event-card">
+                        <span class="rarity">@currentEvent.Rarity</span>
+                        <h3>@currentEvent.Title</h3>
+                        <p>@currentEvent.Description</p>
+                        <div class="choices">
+                            @foreach (var choice in currentEvent.Choices.Where(c => !c.IsHidden))
+                            {
+                                <button @onclick="() => SelectChoice(choice)" disabled="@isProcessing">
+                                    @choice.Text
+                                    @if (choice.CheckStat.HasValue)
+                                    {
+                                        <small>[@choice.CheckStat: @choice.CheckDifficulty]</small>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (battleResult != null)
+                {
+                    <div class="battle-result @battleResult.Result.ToString().ToLower()">
+                        <h3>@(battleResult.Result == BattleResult.Victory ? "⚔️ Victory!" : "💀 Defeat")</h3>
+                        <p>@battleResult.Narrative</p>
+                        @if (battleResult.ExperienceGained > 0) { <span>+@battleResult.ExperienceGained XP</span> }
+                        @if (battleResult.GoldGained > 0) { <span>+@battleResult.GoldGained Gold</span> }
+                        <button @onclick="() => battleResult = null">Continue</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="narrative">@(string.IsNullOrEmpty(lastNarrative) ? $"It is {gameState.SeasonInfo.Name}. What will you do?" : lastNarrative)</div>
+                    
+                    @if (lastStatChanges.Any())
+                    {
+                        <div class="stat-changes">
+                            @foreach (var c in lastStatChanges)
+                            {
+                                <span class="@(c.Change >= 0 ? "pos" : "neg")">@c.StatName: @(c.Change >= 0 ? "+" : "")@c.Change</span>
+                            }
+                        </div>
+                    }
+
+                    <div class="actions">
+                        <button class="train" @onclick="() => showTraining = true" disabled="@isProcessing">💪 Train</button>
+                        <button class="rest" @onclick="() => ProcessAction(ActionType.Rest)" disabled="@isProcessing">🛏️ Rest</button>
+                        <button class="explore" @onclick="() => ProcessAction(ActionType.Explore)" disabled="@isProcessing">🗺️ Explore</button>
+                        <button class="battle" @onclick="() => showBattle = true" disabled="@isProcessing">⚔️ Battle</button>
+                        <button class="study" @onclick="() => ProcessAction(ActionType.Study)" disabled="@isProcessing">📚 Study</button>
+                    </div>
+
+                    @if (showTraining)
+                    {
+                        <div class="sub-options">
+                            <h4>Choose Training:</h4>
+                            @foreach (var t in trainingScenarios)
+                            {
+                                <button @onclick="() => ProcessAction(ActionType.Train, t.Id)" disabled="@isProcessing">
+                                    @t.Name (@t.PrimaryStat +@t.BaseStatGain) ⚡@t.EnergyCost
+                                    @if (t.HasSeasonalBonus) { <span>🌟</span> }
+                                </button>
+                            }
+                            <button class="cancel" @onclick="() => showTraining = false">Cancel</button>
+                        </div>
+                    }
+
+                    @if (showBattle)
+                    {
+                        <div class="sub-options">
+                            <h4>Choose Enemy (⚡30):</h4>
+                            @foreach (var e in enemies)
+                            {
+                                <button @onclick="() => ProcessAction(ActionType.Battle, e.Id)" disabled="@isProcessing">
+                                    @e.Name (Tier @e.DifficultyTier)
+                                </button>
+                            }
+                            <button @onclick="() => ProcessAction(ActionType.Battle, null)" disabled="@isProcessing">🎲 Random</button>
+                            <button class="cancel" @onclick="() => showBattle = false">Cancel</button>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="storybook-panel">
+                <h3>📚 Storybooks</h3>
+                @for (int i = 0; i < 5; i++)
+                {
+                    var book = gameState.EquippedStorybooks.ElementAtOrDefault(i);
+                    <div class="slot @(book != null ? "equipped" : "empty")">
+                        @(book?.Name ?? $"Slot {i + 1}")
+                    </div>
+                }
+                <h4>Season: @gameState.SeasonInfo.Name</h4>
+                @foreach (var b in gameState.SeasonInfo.Bonuses)
+                {
+                    <div class="bonus">@b</div>
+                }
+            </div>
+        </div>
+
+        @if (gameState.Character.IsGameComplete)
+        {
+            <div class="complete-overlay">
+                <div class="complete-content">
+                    <h2>🏆 Journey Complete!</h2>
+                    <p>Power: @gameState.Character.TotalPower | Level: @gameState.Character.Level | Gold: @gameState.Character.Gold</p>
+                    <button @onclick='() => Navigation.NavigateTo("/sessions")'>Return to Menu</button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int SessionId { get; set; }
+    private GameStateDto? gameState;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private string lastNarrative = "";
+    private List<StatChangeDto> lastStatChanges = new();
+    private RandomEventDto? currentEvent;
+    private BattleResultDto? battleResult;
+    private bool showTraining, showBattle;
+    private List<TrainingScenarioDto> trainingScenarios = new();
+    private List<EnemyDto> enemies = new();
+
+    protected override async Task OnInitializedAsync() => await LoadGameState();
+
+    private async Task LoadGameState()
+    {
+        isLoading = true;
+        gameState = await GameApi.GetGameStateAsync(SessionId);
+        trainingScenarios = await GameApi.GetTrainingScenariosAsync(SessionId);
+        enemies = await GameApi.GetEnemiesAsync(SessionId);
+        isLoading = false;
+    }
+
+    private async Task ProcessAction(ActionType action, int? targetId = null)
+    {
+        isProcessing = true;
+        showTraining = showBattle = false;
+        var result = await GameApi.ProcessTurnAsync(SessionId, action, targetId);
+        if (result != null)
+        {
+            lastNarrative = result.Narrative;
+            lastStatChanges = result.StatChanges;
+            currentEvent = result.TriggeredEvent;
+            battleResult = result.BattleResult;
+            await LoadGameState();
+        }
+        isProcessing = false;
+    }
+
+    private async Task SelectChoice(EventChoiceDto choice)
+    {
+        if (currentEvent == null) return;
+        isProcessing = true;
+        var result = await GameApi.ProcessEventChoiceAsync(SessionId, currentEvent.Id, choice.Id);
+        if (result != null)
+        {
+            lastNarrative = result.ResultDescription;
+            lastStatChanges = result.StatChanges;
+            currentEvent = result.FollowUpEvent;
+            await LoadGameState();
+        }
+        isProcessing = false;
+    }
+
+    private string GetSeasonIcon(Season s) => s switch { Season.Spring => "🌸", Season.Summer => "☀️", Season.Autumn => "🍂", Season.Winter => "❄️", _ => "🌍" };
+}

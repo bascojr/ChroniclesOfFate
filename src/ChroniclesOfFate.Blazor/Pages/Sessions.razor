@@ -1,0 +1,153 @@
+@page "/sessions"
+@attribute [Authorize]
+@using ChroniclesOfFate.Blazor.Services
+@using ChroniclesOfFate.Core.DTOs
+@using ChroniclesOfFate.Core.Enums
+@inject IGameApiService GameApi
+@inject NavigationManager Navigation
+
+<div class="sessions-container">
+    <h2>Your Adventures</h2>
+
+    @if (isLoading)
+    {
+        <div class="loading">Loading your saved games...</div>
+    }
+    else
+    {
+        <div class="sessions-grid">
+            @foreach (var session in sessions)
+            {
+                <div class="session-card" @onclick="() => LoadGame(session.Id)">
+                    <h3>@session.SessionName</h3>
+                    <p class="character-info">@session.CharacterName • Level @session.CharacterLevel</p>
+                    <p class="progress">Turn @session.TotalTurns / 120</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: @((session.TotalTurns ?? 0) / 1.2)%"></div>
+                    </div>
+                    <p class="state @session.State.ToString().ToLower()">@session.State</p>
+                </div>
+            }
+
+            <div class="session-card new-game" @onclick="ShowNewGameDialog">
+                <div class="new-game-icon">+</div>
+                <h3>New Adventure</h3>
+                <p>Start a new 10-year journey</p>
+            </div>
+        </div>
+    }
+</div>
+
+@if (showNewGameDialog)
+{
+    <div class="modal-overlay" @onclick="HideNewGameDialog">
+        <div class="modal-content" @onclick:stopPropagation>
+            <h2>Begin New Adventure</h2>
+            
+            <div class="form-group">
+                <label>Save Name</label>
+                <input type="text" @bind="newGameName" placeholder="My Adventure" class="form-input" />
+            </div>
+
+            <div class="form-group">
+                <label>Character Name</label>
+                <input type="text" @bind="characterName" placeholder="Enter name" class="form-input" />
+            </div>
+
+            <div class="form-group">
+                <label>Choose Your Class</label>
+                <div class="class-grid">
+                    @foreach (CharacterClass cls in Enum.GetValues<CharacterClass>())
+                    {
+                        <div class="class-card @(selectedClass == cls ? "selected" : "")" @onclick="() => selectedClass = cls">
+                            <div class="class-icon">@GetClassIcon(cls)</div>
+                            <h4>@cls</h4>
+                            <p>@GetClassDescription(cls)</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="HideNewGameDialog">Cancel</button>
+                <button class="btn-primary" @onclick="CreateGame" disabled="@isCreating">
+                    @(isCreating ? "Creating..." : "Start Adventure")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<GameSessionListDto> sessions = new();
+    private bool isLoading = true;
+    private bool showNewGameDialog = false;
+    private bool isCreating = false;
+    
+    private string newGameName = "";
+    private string characterName = "";
+    private CharacterClass selectedClass = CharacterClass.Warrior;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSessions();
+    }
+
+    private async Task LoadSessions()
+    {
+        isLoading = true;
+        sessions = await GameApi.GetSessionsAsync();
+        isLoading = false;
+    }
+
+    private void LoadGame(int sessionId)
+    {
+        Navigation.NavigateTo($"/play/{sessionId}");
+    }
+
+    private void ShowNewGameDialog()
+    {
+        showNewGameDialog = true;
+        newGameName = $"Adventure {DateTime.Now:MMM dd}";
+        characterName = "";
+    }
+
+    private void HideNewGameDialog()
+    {
+        showNewGameDialog = false;
+    }
+
+    private async Task CreateGame()
+    {
+        if (string.IsNullOrWhiteSpace(characterName)) return;
+
+        isCreating = true;
+        var session = await GameApi.CreateSessionAsync(newGameName, characterName, selectedClass);
+        isCreating = false;
+
+        if (session != null)
+        {
+            Navigation.NavigateTo($"/play/{session.Id}");
+        }
+    }
+
+    private string GetClassIcon(CharacterClass cls) => cls switch
+    {
+        CharacterClass.Warrior => "⚔️",
+        CharacterClass.Mage => "🔮",
+        CharacterClass.Rogue => "🗡️",
+        CharacterClass.Cleric => "✨",
+        CharacterClass.Ranger => "🏹",
+        _ => "👤"
+    };
+
+    private string GetClassDescription(CharacterClass cls) => cls switch
+    {
+        CharacterClass.Warrior => "High Strength & Endurance",
+        CharacterClass.Mage => "High Intelligence & Charisma",
+        CharacterClass.Rogue => "High Agility & Luck",
+        CharacterClass.Cleric => "Balanced Int & Endurance",
+        CharacterClass.Ranger => "High Agility & Strength",
+        _ => ""
+    };
+}
