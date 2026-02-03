@@ -25,7 +25,7 @@ public class BattleService : IBattleService
     {
         var character = await _unitOfWork.Characters.GetWithFullDetailsAsync(characterId)
             ?? throw new InvalidOperationException("Character not found");
-        
+
         var enemy = await _unitOfWork.Enemies.GetByIdAsync(enemyId)
             ?? throw new InvalidOperationException("Enemy not found");
 
@@ -39,7 +39,10 @@ public class BattleService : IBattleService
                 new List<BattleRoundDto>(),
                 0, 0, 0, 0, 0,
                 MapToEnemyDto(enemy),
-                null
+                null,
+                0,
+                0,
+                new List<SkillProcDto>()
             );
         }
 
@@ -47,19 +50,109 @@ public class BattleService : IBattleService
         int playerHealth = character.CurrentHealth;
         int enemyHealth = enemy.Health;
         var rounds = new List<BattleRoundDto>();
-        int roundNumber = 0;
-        const int maxRounds = 20;
 
         // Calculate combat stats
         int playerPower = CalculateCombatPower(character);
         int enemyPower = CalculateEnemyPower(enemy);
 
-        // Battle loop
-        while (playerHealth > 0 && enemyHealth > 0 && roundNumber < maxRounds)
+        // Get character's skills for combat calculations
+        var skills = character.Skills?.Where(cs => cs.Skill != null).Select(cs => cs.Skill!).ToList() ?? new List<Skill>();
+
+        // Track which active skills have already been used (they only proc once per battle)
+        var usedActiveSkills = new HashSet<int>();
+        var skillsUsed = new List<SkillProcDto>();
+
+        // Calculate attack intervals based on agility
+        int playerInterval = CalculateAttackInterval(character.Agility);
+        int enemyInterval = CalculateAttackInterval(enemy.Agility);
+
+        // Initialize timers - first attacks happen after their respective intervals
+        int playerNextAttack = playerInterval;
+        int enemyNextAttack = enemyInterval;
+        int currentTime = 0;
+        const int maxBattleDurationMs = 60000;
+
+        // Time-based battle loop
+        while (playerHealth > 0 && enemyHealth > 0 && currentTime < maxBattleDurationMs)
         {
-            roundNumber++;
-            var round = SimulateBattleRound(character, enemy, ref playerHealth, ref enemyHealth, roundNumber);
-            rounds.Add(round);
+            if (playerNextAttack <= enemyNextAttack)
+            {
+                // Player attacks
+                currentTime = playerNextAttack;
+
+                var (damage, action, skillNarrative) = CalculatePlayerAttackWithSkills(character, enemy, skills, usedActiveSkills, skillsUsed, currentTime);
+                enemyHealth -= damage;
+
+                // Apply life steal
+                int healingDone = ApplyLifeSteal(skills, damage, ref playerHealth, character.MaxHealth);
+
+                var narrativeParts = new List<string>();
+                narrativeParts.Add($"{character.Name} {action} for {damage} damage!");
+                if (!string.IsNullOrEmpty(skillNarrative)) narrativeParts.Add(skillNarrative);
+                if (healingDone > 0) narrativeParts.Add($"Life stolen: +{healingDone} HP!");
+
+                rounds.Add(new BattleRoundDto(
+                    currentTime,
+                    "Player",
+                    action,
+                    damage,
+                    playerHealth,
+                    Math.Max(enemyHealth, 0),
+                    string.Join(" ", narrativeParts)
+                ));
+
+                playerNextAttack += playerInterval;
+            }
+            else
+            {
+                // Enemy attacks
+                currentTime = enemyNextAttack;
+
+                var (damage, action) = CalculateEnemyAttackWithSkills(enemy, character, skills, ref enemyHealth);
+
+                var narrativeParts = new List<string>();
+
+                // Check player evasion
+                if (CheckEvasion(skills, character.Agility))
+                {
+                    narrativeParts.Add($"{character.Name} dodges the attack!");
+
+                    // Check for counter attack on dodge
+                    if (CheckCounterAttack(skills))
+                    {
+                        int counterDamage = (int)(character.Strength * 0.2) + _random.Next(5, 10);
+                        enemyHealth -= counterDamage;
+                        narrativeParts.Add($"{character.Name} counter-attacks for {counterDamage} damage!");
+                    }
+
+                    rounds.Add(new BattleRoundDto(
+                        currentTime,
+                        "Enemy",
+                        action + " (dodged)",
+                        0,
+                        playerHealth,
+                        Math.Max(enemyHealth, 0),
+                        string.Join(" ", narrativeParts)
+                    ));
+                }
+                else
+                {
+                    playerHealth -= damage;
+                    narrativeParts.Add($"{enemy.Name} {action} for {damage} damage!");
+
+                    rounds.Add(new BattleRoundDto(
+                        currentTime,
+                        "Enemy",
+                        action,
+                        damage,
+                        Math.Max(playerHealth, 0),
+                        enemyHealth,
+                        string.Join(" ", narrativeParts)
+                    ));
+                }
+
+                enemyNextAttack += enemyInterval;
+            }
         }
 
         // Determine result
@@ -70,7 +163,8 @@ public class BattleService : IBattleService
         if (enemyHealth <= 0)
         {
             result = BattleResult.Victory;
-            narrative = GenerateVictoryNarrative(character.Name, enemy.Name, rounds.Count);
+            double battleDurationSec = currentTime / 1000.0;
+            narrative = GenerateVictoryNarrative(character.Name, enemy.Name, battleDurationSec);
             expGained = CalculateExperienceReward(enemy, character.Level);
             goldGained = enemy.GoldReward + _random.Next(0, enemy.GoldReward / 2);
             repGained = enemy.ReputationReward;
@@ -83,7 +177,7 @@ public class BattleService : IBattleService
         else
         {
             result = BattleResult.Draw;
-            narrative = $"After {maxRounds} rounds of intense combat, neither {character.Name} nor {enemy.Name} could claim victory. Both fighters retreat to recover.";
+            narrative = $"After 60 seconds of intense combat, neither {character.Name} nor {enemy.Name} could claim victory. Both fighters retreat to recover.";
         }
 
         // Calculate health lost
@@ -138,8 +232,20 @@ public class BattleService : IBattleService
             healthLost,
             battleEnergyCost,
             MapToEnemyDto(enemy),
-            levelUp
+            levelUp,
+            playerInterval,
+            enemyInterval,
+            skillsUsed
         );
+    }
+
+    private int CalculateAttackInterval(int agility)
+    {
+        const int baseIntervalMs = 5000;
+        const int minIntervalMs = 500;
+        const int agilityDivisor = 100;
+        int interval = (int)(baseIntervalMs / (1.0 + agility / (double)agilityDivisor));
+        return Math.Max(minIntervalMs, interval);
     }
 
     public async Task<BattleResultDto> SimulateRandomBattleAsync(int characterId)
@@ -213,107 +319,6 @@ public class BattleService : IBattleService
         return enemy.Strength + enemy.Agility + enemy.Intelligence + enemy.Endurance;
     }
 
-    private BattleRoundDto SimulateBattleRound(
-        Character character,
-        Enemy enemy,
-        ref int playerHealth,
-        ref int enemyHealth,
-        int roundNumber)
-    {
-        // Get character's skills for combat calculations
-        var skills = character.Skills?.Where(cs => cs.Skill != null).Select(cs => cs.Skill!).ToList() ?? new List<Skill>();
-
-        // Determine turn order based on agility
-        bool playerFirst = character.Agility + _random.Next(20) >= enemy.Agility + _random.Next(20);
-
-        int playerDamage = 0, enemyDamage = 0;
-        string playerAction = "", enemyAction = "";
-        var narrativeParts = new List<string>();
-        int healingDone = 0;
-
-        if (playerFirst)
-        {
-            // Player attacks first
-            (playerDamage, playerAction, var activeSkillNarrative) = CalculatePlayerAttackWithSkills(character, enemy, skills);
-            enemyHealth -= playerDamage;
-            narrativeParts.Add($"{character.Name} {playerAction} for {playerDamage} damage!");
-            if (!string.IsNullOrEmpty(activeSkillNarrative)) narrativeParts.Add(activeSkillNarrative);
-
-            // Apply life steal
-            healingDone = ApplyLifeSteal(skills, playerDamage, ref playerHealth, character.MaxHealth);
-            if (healingDone > 0) narrativeParts.Add($"Life stolen: +{healingDone} HP!");
-
-            // Apply thorns damage to enemy when they hit us (will happen after their attack)
-
-            if (enemyHealth > 0)
-            {
-                // Enemy counterattacks
-                (enemyDamage, enemyAction) = CalculateEnemyAttackWithSkills(enemy, character, skills, ref enemyHealth);
-
-                // Check player evasion
-                if (CheckEvasion(skills, character.Agility))
-                {
-                    narrativeParts.Add($"{character.Name} dodges the attack!");
-                    enemyDamage = 0;
-                }
-                else
-                {
-                    playerHealth -= enemyDamage;
-                    narrativeParts.Add($"{enemy.Name} {enemyAction} for {enemyDamage} damage!");
-                }
-            }
-        }
-        else
-        {
-            // Enemy attacks first
-            (enemyDamage, enemyAction) = CalculateEnemyAttackWithSkills(enemy, character, skills, ref enemyHealth);
-
-            // Check player evasion
-            if (CheckEvasion(skills, character.Agility))
-            {
-                narrativeParts.Add($"{character.Name} dodges the incoming attack!");
-                enemyDamage = 0;
-
-                // Check for counter attack on dodge
-                if (CheckCounterAttack(skills))
-                {
-                    int counterDamage = (int)(character.Strength * 0.2) + _random.Next(5, 10);
-                    enemyHealth -= counterDamage;
-                    narrativeParts.Add($"{character.Name} counter-attacks for {counterDamage} damage!");
-                }
-            }
-            else
-            {
-                playerHealth -= enemyDamage;
-                narrativeParts.Add($"{enemy.Name} {enemyAction} for {enemyDamage} damage!");
-            }
-
-            if (playerHealth > 0)
-            {
-                // Player counterattacks
-                (playerDamage, playerAction, var activeSkillNarrative) = CalculatePlayerAttackWithSkills(character, enemy, skills);
-                enemyHealth -= playerDamage;
-                narrativeParts.Add($"{character.Name} {playerAction} for {playerDamage} damage!");
-                if (!string.IsNullOrEmpty(activeSkillNarrative)) narrativeParts.Add(activeSkillNarrative);
-
-                // Apply life steal
-                healingDone = ApplyLifeSteal(skills, playerDamage, ref playerHealth, character.MaxHealth);
-                if (healingDone > 0) narrativeParts.Add($"Life stolen: +{healingDone} HP!");
-            }
-        }
-
-        return new BattleRoundDto(
-            roundNumber,
-            playerAction,
-            playerDamage,
-            enemyAction,
-            enemyDamage,
-            Math.Max(playerHealth, 0),
-            Math.Max(enemyHealth, 0),
-            string.Join(" ", narrativeParts)
-        );
-    }
-
     private bool CheckEvasion(List<Skill> skills, int agility)
     {
         double evasionChance = agility / 1000.0; // Base evasion from agility
@@ -352,19 +357,27 @@ public class BattleService : IBattleService
         return currentHealth - oldHealth;
     }
 
-    private (int damage, string action, string? skillNarrative) CalculatePlayerAttackWithSkills(Character character, Enemy enemy, List<Skill> skills)
+    private (int damage, string action, string? skillNarrative) CalculatePlayerAttackWithSkills(Character character, Enemy enemy, List<Skill> skills, HashSet<int> usedActiveSkills, List<SkillProcDto> skillsUsed, int currentTimeMs)
     {
-        // Check for active skill trigger first
-        foreach (var skill in skills.Where(s => s.SkillType == SkillType.Active))
+        // Check for active skill trigger first (each active skill can only proc once per battle)
+        var availableActiveSkills = skills.Where(s => s.SkillType == SkillType.Active && !usedActiveSkills.Contains(s.Id)).ToList();
+
+        foreach (var skill in availableActiveSkills)
         {
             if (_random.RollChance(skill.TriggerChance))
             {
+                // Mark this skill as used for the rest of the battle
+                usedActiveSkills.Add(skill.Id);
+
                 int statBonus = skill.ScalingStat.HasValue ? (int)(character.GetStat(skill.ScalingStat.Value) * skill.ScalingMultiplier) : 0;
                 int skillDamage = skill.BaseDamage + statBonus;
 
                 // Defense reduction
                 int enemyDefense = enemy.Endurance / 5;
                 skillDamage = Math.Max(1, skillDamage - enemyDefense);
+
+                // Track this skill proc for the battle result
+                skillsUsed.Add(new SkillProcDto(skill.Name, skillDamage, currentTimeMs));
 
                 return (skillDamage, skill.ActiveNarrative ?? "uses a special skill", skill.Name + " activated!");
             }
@@ -464,13 +477,14 @@ public class BattleService : IBattleService
         return actions[_random.Next(actions.Length)];
     }
 
-    private string GenerateVictoryNarrative(string characterName, string enemyName, int rounds)
+    private string GenerateVictoryNarrative(string characterName, string enemyName, double durationSeconds)
     {
+        string durationText = durationSeconds < 10 ? $"{durationSeconds:F1} seconds" : $"{durationSeconds:F0} seconds";
         string[] templates =
         {
-            $"After {rounds} rounds of intense combat, {characterName} emerges victorious over {enemyName}!",
-            $"{characterName} defeats {enemyName} in a fierce battle lasting {rounds} rounds!",
-            $"With determination and skill, {characterName} overcomes {enemyName} after {rounds} rounds of combat!",
+            $"After {durationText} of intense combat, {characterName} emerges victorious over {enemyName}!",
+            $"{characterName} defeats {enemyName} in a fierce battle lasting {durationText}!",
+            $"With determination and skill, {characterName} overcomes {enemyName} after {durationText} of combat!",
             $"The battle is won! {characterName} stands triumphant over the fallen {enemyName}!"
         };
         return templates[_random.Next(templates.Length)];

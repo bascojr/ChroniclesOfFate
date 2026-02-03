@@ -185,7 +185,24 @@ public record EventChoiceDto(
     bool IsHidden,
     StatType? CheckStat,
     int CheckDifficulty,
-    string? StatRequirementHint
+    string? StatRequirementHint,
+    ChoiceRewardsDto Rewards,
+    ChoiceRewardsDto? FailureRewards
+);
+
+public record ChoiceRewardsDto(
+    int Strength,
+    int Agility,
+    int Intelligence,
+    int Endurance,
+    int Charisma,
+    int Luck,
+    int Energy,
+    int Health,
+    int Gold,
+    int Reputation,
+    int Experience,
+    string? SkillName
 );
 
 public record EventChoiceResultDto(
@@ -225,15 +242,23 @@ public record BattleResultDto(
     int HealthLost,
     int EnergySpent,
     EnemyDto Enemy,
-    LevelUpResultDto? LevelUp
+    LevelUpResultDto? LevelUp,
+    int PlayerAttackIntervalMs,
+    int EnemyAttackIntervalMs,
+    List<SkillProcDto> SkillsUsed
+);
+
+public record SkillProcDto(
+    string SkillName,
+    int Damage,
+    int TimeMs
 );
 
 public record BattleRoundDto(
-    int RoundNumber,
-    string PlayerAction,
-    int PlayerDamage,
-    string EnemyAction,
-    int EnemyDamage,
+    int TimeMs,
+    string Attacker,
+    string Action,
+    int Damage,
     int PlayerHealthRemaining,
     int EnemyHealthRemaining,
     string Narrative

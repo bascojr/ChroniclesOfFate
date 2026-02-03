@@ -202,55 +202,44 @@ public class TurnService : ITurnService
 
         narrativeParts.Add(GenerateExploreNarrative(character.CurrentSeason));
 
-        // Very high chance of random event while exploring (80%) with bias towards higher rarity
+        // Calculate experience: base 50-500 scaling with level, plus up to 50% bonus
+        int baseExp = Math.Min(500, 50 + (character.Level - 1) * 25);
+        double bonusMultiplier = 1.0 + (_random.NextDouble() * 0.5); // 1.0 to 1.5
+        int totalExp = (int)(baseExp * bonusMultiplier);
+        int oldExp = character.Experience;
+        character.Experience += totalExp;
+        statChanges.Add(new StatChangeDto("Experience", oldExp, character.Experience, totalExp));
+        narrativeParts.Add($"Your exploration grants you {totalExp} experience!");
+
+        // Random stat gains: 0-3 to ALL stats
+        var allStats = new[] { StatType.Strength, StatType.Agility, StatType.Intelligence, StatType.Endurance, StatType.Charisma, StatType.Luck };
+        foreach (var stat in allStats)
+        {
+            int gain = _random.Next(0, 4); // 0-3
+            int oldStat = character.GetStat(stat);
+            if (gain > 0)
+            {
+                character.AddStat(stat, gain);
+                statChanges.Add(new StatChangeDto(stat.ToString(), oldStat, character.GetStat(stat), gain));
+            }
+        }
+        narrativeParts.Add("The journey strengthens you in every way.");
+
+        // 100% chance to trigger an event, with double rate for non-common events
         RandomEventDto? triggeredEvent = null;
         var storybookIds = character.EquippedStorybooks.Select(es => es.StorybookId).ToList();
 
-        // 80% chance to trigger an event, with preference for higher rarity
-        if (_random.RollChance(0.80))
-        {
-            triggeredEvent = await _eventService.TryTriggerEventAsync(characterId, ActionType.Explore, storybookIds, preferHigherRarity: true);
-        }
+        triggeredEvent = await _eventService.TryTriggerEventAsync(
+            characterId,
+            ActionType.Explore,
+            storybookIds,
+            preferHigherRarity: true,
+            doubleNonCommonRate: true
+        );
 
         if (triggeredEvent != null)
         {
             narrativeParts.Add($"You encounter: {triggeredEvent.Title}");
-        }
-        else
-        {
-            // Enhanced exploration rewards if no event - better since it costs more energy
-            int goldFound = _random.Next(20, 50) + (character.Luck / 10);
-            int oldGold = character.Gold;
-            character.Gold += goldFound;
-            statChanges.Add(new StatChangeDto("Gold", oldGold, character.Gold, goldFound));
-            narrativeParts.Add($"You find {goldFound} gold during your exploration.");
-
-            // Higher chance of stat gains (40%)
-            if (_random.RollChance(0.40))
-            {
-                var randomStat = (StatType)_random.Next(6);
-                int gain = _random.Next(2, 5);
-                int oldStat = character.GetStat(randomStat);
-                character.AddStat(randomStat, gain);
-                statChanges.Add(new StatChangeDto(randomStat.ToString(), oldStat, character.GetStat(randomStat), gain));
-                narrativeParts.Add($"Your {randomStat} improved from the experience.");
-            }
-
-            // Bonus experience from exploration
-            int expGain = _random.Next(15, 30);
-            character.Experience += expGain;
-            statChanges.Add(new StatChangeDto("Experience", character.Experience - expGain, character.Experience, expGain));
-            narrativeParts.Add($"You gained valuable experience from your journey.");
-
-            // Small chance for reputation gain (20%)
-            if (_random.RollChance(0.20))
-            {
-                int repGain = _random.Next(3, 8);
-                int oldRep = character.Reputation;
-                character.Reputation += repGain;
-                statChanges.Add(new StatChangeDto("Reputation", oldRep, character.Reputation, repGain));
-                narrativeParts.Add($"Your exploits have impressed the locals.");
-            }
         }
 
         await _unitOfWork.Characters.UpdateAsync(character);

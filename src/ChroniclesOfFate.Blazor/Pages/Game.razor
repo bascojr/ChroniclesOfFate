@@ -83,13 +83,35 @@
                         <div class="choices">
                             @foreach (var choice in currentEvent.Choices.Where(c => !c.IsHidden))
                             {
-                                <button @onclick="() => SelectChoice(choice)" disabled="@isProcessing">
-                                    @choice.Text
-                                    @if (choice.CheckStat.HasValue)
-                                    {
-                                        <small>[@choice.CheckStat: @choice.CheckDifficulty]</small>
-                                    }
-                                </button>
+                                <div class="choice-container">
+                                    <button @onclick="() => SelectChoice(choice)" disabled="@isProcessing">
+                                        @choice.Text
+                                        @if (choice.CheckStat.HasValue)
+                                        {
+                                            <small class="stat-check">[@choice.CheckStat: @choice.CheckDifficulty]</small>
+                                        }
+                                    </button>
+                                    <div class="choice-rewards">
+                                        @if (choice.CheckStat.HasValue)
+                                        {
+                                            <div class="reward-section success-rewards">
+                                                <span class="reward-label">Success:</span>
+                                                @RenderRewards(choice.Rewards)
+                                            </div>
+                                            @if (choice.FailureRewards != null)
+                                            {
+                                                <div class="reward-section failure-rewards">
+                                                    <span class="reward-label">Failure:</span>
+                                                    @RenderRewards(choice.FailureRewards)
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            @RenderRewards(choice.Rewards)
+                                        }
+                                    </div>
+                                </div>
                             }
                         </div>
                     </div>
@@ -107,8 +129,13 @@
                             @if (battleResult.HealthLost > 0) { <span class="damage">-@battleResult.HealthLost HP</span> }
                         </div>
 
+                        <div class="battle-speed-info">
+                            <span>Your attack speed: @FormatInterval(battleResult.PlayerAttackIntervalMs)</span>
+                            <span>Enemy attack speed: @FormatInterval(battleResult.EnemyAttackIntervalMs)</span>
+                        </div>
+
                         <button class="btn-toggle-log" @onclick="() => showCombatLog = !showCombatLog">
-                            @(showCombatLog ? "Hide" : "Show") Combat Log (@battleResult.Rounds.Count rounds)
+                            @(showCombatLog ? "Hide" : "Show") Combat Log (@battleResult.Rounds.Count attacks)
                         </button>
 
                         @if (showCombatLog)
@@ -119,23 +146,15 @@
                                 </div>
                                 @foreach (var round in battleResult.Rounds)
                                 {
-                                    <div class="combat-round">
-                                        <div class="round-header">Round @round.RoundNumber</div>
+                                    <div class="combat-round @(round.Attacker == "Player" ? "player-turn" : "enemy-turn")">
+                                        <div class="round-header">@FormatTime(round.TimeMs)</div>
                                         <div class="round-actions">
-                                            <div class="action player-action">
-                                                <span class="action-label">You:</span>
-                                                <span class="action-text">@round.PlayerAction</span>
-                                                @if (round.PlayerDamage > 0)
+                                            <div class="action @(round.Attacker == "Player" ? "player-action" : "enemy-action")">
+                                                <span class="action-label">@(round.Attacker == "Player" ? "You" : battleResult.Enemy.Name):</span>
+                                                <span class="action-text">@round.Action</span>
+                                                @if (round.Damage > 0)
                                                 {
-                                                    <span class="damage-dealt">@round.PlayerDamage dmg</span>
-                                                }
-                                            </div>
-                                            <div class="action enemy-action">
-                                                <span class="action-label">@battleResult.Enemy.Name:</span>
-                                                <span class="action-text">@round.EnemyAction</span>
-                                                @if (round.EnemyDamage > 0)
-                                                {
-                                                    <span class="damage-taken">@round.EnemyDamage dmg</span>
+                                                    <span class="@(round.Attacker == "Player" ? "damage-dealt" : "damage-taken")">@round.Damage dmg</span>
                                                 }
                                             </div>
                                         </div>
@@ -466,8 +485,15 @@
                 if (br.ReputationGained > 0) battleStats.Add(new StatChangeDto("Reputation", 0, br.ReputationGained, br.ReputationGained));
                 if (br.HealthLost > 0) battleStats.Add(new StatChangeDto("Health", 0, -br.HealthLost, -br.HealthLost));
 
-                var battleLog = $"{battleIcon} {battleOutcome} vs {br.Enemy.Name} ({br.Rounds.Count} rounds)";
+                var battleLog = $"{battleIcon} {battleOutcome} vs {br.Enemy.Name} ({br.Rounds.Count} attacks)";
                 await AddToMessageLogAsync(battleLog, battleStats, battleLogType, year, month);
+
+                // Log skill procs with catchy messages
+                foreach (var skillProc in br.SkillsUsed)
+                {
+                    var skillMessage = GenerateSkillProcMessage(skillProc.SkillName, skillProc.Damage, br.Enemy.Name);
+                    await AddToMessageLogAsync(skillMessage, new List<StatChangeDto>(), "positive", year, month);
+                }
             }
 
             await LoadGameState();
@@ -705,4 +731,61 @@
             return $"{effectName}: +{skill.BonusFlatValue}";
         return effectName;
     }
+
+    private string FormatTime(int timeMs)
+    {
+        var seconds = timeMs / 1000.0;
+        return $"{seconds:F1}s";
+    }
+
+    private string FormatInterval(int intervalMs)
+    {
+        var seconds = intervalMs / 1000.0;
+        return $"{seconds:F2}s";
+    }
+
+    private string GenerateSkillProcMessage(string skillName, int damage, string enemyName)
+    {
+        var messages = new[]
+        {
+            $"💥 SKILL UNLEASHED! {skillName} devastates {enemyName} for {damage} damage!",
+            $"🔥 {skillName} ACTIVATED! You obliterate {enemyName} with {damage} damage!",
+            $"⚡ BOOM! {skillName} strikes {enemyName} like thunder for {damage} damage!",
+            $"✨ {skillName} triggers! {enemyName} takes a crushing {damage} damage!",
+            $"🌟 CRITICAL SKILL! {skillName} tears through {enemyName} for {damage} damage!",
+            $"💫 {skillName} UNLEASHED! {enemyName} reels from {damage} damage!",
+            $"🎯 SKILL PROC! {skillName} connects for a devastating {damage} damage!",
+            $"⭐ {skillName} ACTIVATES! You deal {damage} damage to {enemyName}!"
+        };
+        return messages[Random.Shared.Next(messages.Length)];
+    }
+
+    private RenderFragment RenderRewards(ChoiceRewardsDto rewards) => __builder =>
+    {
+        var rewardItems = new List<(string icon, string text, bool positive)>();
+
+        if (rewards.Strength != 0) rewardItems.Add(("💪", $"{(rewards.Strength > 0 ? "+" : "")}{rewards.Strength} STR", rewards.Strength > 0));
+        if (rewards.Agility != 0) rewardItems.Add(("🏃", $"{(rewards.Agility > 0 ? "+" : "")}{rewards.Agility} AGI", rewards.Agility > 0));
+        if (rewards.Intelligence != 0) rewardItems.Add(("🧠", $"{(rewards.Intelligence > 0 ? "+" : "")}{rewards.Intelligence} INT", rewards.Intelligence > 0));
+        if (rewards.Endurance != 0) rewardItems.Add(("🛡️", $"{(rewards.Endurance > 0 ? "+" : "")}{rewards.Endurance} END", rewards.Endurance > 0));
+        if (rewards.Charisma != 0) rewardItems.Add(("💬", $"{(rewards.Charisma > 0 ? "+" : "")}{rewards.Charisma} CHA", rewards.Charisma > 0));
+        if (rewards.Luck != 0) rewardItems.Add(("🍀", $"{(rewards.Luck > 0 ? "+" : "")}{rewards.Luck} LCK", rewards.Luck > 0));
+        if (rewards.Health != 0) rewardItems.Add(("❤️", $"{(rewards.Health > 0 ? "+" : "")}{rewards.Health} HP", rewards.Health > 0));
+        if (rewards.Energy != 0) rewardItems.Add(("⚡", $"{(rewards.Energy > 0 ? "+" : "")}{rewards.Energy} Energy", rewards.Energy > 0));
+        if (rewards.Gold != 0) rewardItems.Add(("💰", $"{(rewards.Gold > 0 ? "+" : "")}{rewards.Gold} Gold", rewards.Gold > 0));
+        if (rewards.Reputation != 0) rewardItems.Add(("⭐", $"{(rewards.Reputation > 0 ? "+" : "")}{rewards.Reputation} Rep", rewards.Reputation > 0));
+        if (rewards.Experience != 0) rewardItems.Add(("✨", $"{(rewards.Experience > 0 ? "+" : "")}{rewards.Experience} XP", rewards.Experience > 0));
+        if (!string.IsNullOrEmpty(rewards.SkillName)) rewardItems.Add(("🎯", $"Skill: {rewards.SkillName}", true));
+
+        <div class="rewards-list">
+            @foreach (var item in rewardItems)
+            {
+                <span class="reward-item @(item.positive ? "positive" : "negative")">@item.icon @item.text</span>
+            }
+            @if (!rewardItems.Any())
+            {
+                <span class="reward-item neutral">No stat changes</span>
+            }
+        </div>
+    };
 }

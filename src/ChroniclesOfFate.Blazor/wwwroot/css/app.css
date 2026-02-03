@@ -186,9 +186,25 @@ body {
 .event-card .rarity { display: inline-block; padding: 0.25rem 0.5rem; background: var(--accent); border-radius: 4px; font-size: 0.75rem; margin-bottom: 0.5rem; }
 .event-card h3 { margin-bottom: 0.5rem; }
 .event-card p { color: var(--text-secondary); margin-bottom: 1rem; }
-.choices button { width: 100%; padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid var(--bg-hover); border-radius: 6px; background: transparent; color: var(--text-primary); cursor: pointer; text-align: left; }
+
+/* Choice Container */
+.choice-container { margin-bottom: 1rem; }
+.choices button { width: 100%; padding: 0.75rem; margin-bottom: 0.25rem; border: 1px solid var(--bg-hover); border-radius: 6px; background: transparent; color: var(--text-primary); cursor: pointer; text-align: left; }
 .choices button:hover { border-color: var(--accent); background: var(--bg-hover); }
-.choices button small { display: block; color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; }
+.choices button .stat-check { display: block; color: var(--accent-gold); font-size: 0.75rem; margin-top: 0.25rem; }
+
+/* Choice Rewards */
+.choice-rewards { padding: 0.5rem 0.75rem; background: var(--bg-card); border-radius: 0 0 6px 6px; border: 1px solid var(--bg-hover); border-top: none; }
+.reward-section { margin-bottom: 0.25rem; }
+.reward-section:last-child { margin-bottom: 0; }
+.reward-label { font-size: 0.7rem; font-weight: bold; margin-right: 0.5rem; }
+.success-rewards .reward-label { color: var(--success); }
+.failure-rewards .reward-label { color: var(--danger); }
+.rewards-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.reward-item { font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 4px; white-space: nowrap; }
+.reward-item.positive { background: rgba(39, 174, 96, 0.2); color: var(--success); }
+.reward-item.negative { background: rgba(231, 76, 60, 0.2); color: var(--danger); }
+.reward-item.neutral { background: var(--bg-hover); color: var(--text-secondary); }
 
 .battle-result { padding: 1.5rem; border-radius: 12px; text-align: center; }
 .battle-result.victory { background: rgba(39, 174, 96, 0.2); border: 2px solid var(--success); }
@@ -203,10 +219,27 @@ body {
 .btn-continue { background: var(--accent); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 1rem; margin-top: 1rem; transition: all 0.2s; }
 .btn-continue:hover { background: #c13a52; }
 
+/* Battle Speed Info */
+.battle-speed-info {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-dark);
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+.battle-speed-info span {
+    color: var(--text-secondary);
+}
+
 /* Combat Log */
 .combat-log { margin-top: 1rem; background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: left; max-height: 300px; overflow-y: auto; }
 .combat-log-header { padding: 0.5rem; background: var(--bg-hover); border-radius: 6px; margin-bottom: 0.75rem; font-weight: bold; text-align: center; color: var(--accent-gold); }
 .combat-round { background: var(--bg-card); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; border-left: 3px solid var(--info); }
+.combat-round.player-turn { border-left-color: var(--info); }
+.combat-round.enemy-turn { border-left-color: var(--danger); }
 .combat-round:last-child { margin-bottom: 0; }
 .round-header { font-size: 0.75rem; color: var(--accent-gold); font-weight: bold; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
 .round-actions { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }

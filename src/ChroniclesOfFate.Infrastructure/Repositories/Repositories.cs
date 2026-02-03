@@ -110,7 +110,11 @@ public class RandomEventRepository : Repository<RandomEvent>, IRandomEventReposi
     }
     
     public async Task<RandomEvent?> GetWithChoicesAsync(int eventId) =>
-        await _dbSet.Include(e => e.Choices).Include(e => e.Storybook).FirstOrDefaultAsync(e => e.Id == eventId);
+        await _dbSet
+            .Include(e => e.Choices).ThenInclude(c => c.GrantSkill)
+            .Include(e => e.Choices).ThenInclude(c => c.FailureGrantSkill)
+            .Include(e => e.Storybook)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
 }
 
 public class EventChoiceRepository : Repository<EventChoice>, IEventChoiceRepository

@@ -24,7 +24,8 @@ public class RandomEventService : IRandomEventService
         int characterId,
         ActionType action,
         IEnumerable<int> equippedStorybookIds,
-        bool preferHigherRarity = false)
+        bool preferHigherRarity = false,
+        bool doubleNonCommonRate = false)
     {
         var character = await _unitOfWork.Characters.GetByIdAsync(characterId)
             ?? throw new InvalidOperationException("Character not found");
@@ -46,31 +47,25 @@ public class RandomEventService : IRandomEventService
         if (!eligibleList.Any())
             return null;
 
-        // When preferHigherRarity is true, sort events so higher rarity events are checked first
-        // and boost their trigger chances
-        if (preferHigherRarity)
-        {
-            eligibleList = eligibleList
-                .OrderByDescending(e => (int)e.Rarity)
-                .ToList();
-        }
+        // Build weighted list based on rarity boosts
+        var weightedEvents = new List<(RandomEvent ev, double weight)>();
 
         foreach (var ev in eligibleList)
         {
-            double triggerChance = ev.BaseProbability;
+            double weight = ev.BaseProbability;
 
             if (ev.StorybookId.HasValue)
             {
                 var storybook = await _unitOfWork.Storybooks.GetByIdAsync(ev.StorybookId.Value);
                 if (storybook != null)
                 {
-                    triggerChance *= storybook.EventTriggerChance * 2;
+                    weight *= storybook.EventTriggerChance * 2;
                 }
             }
 
-            triggerChance *= (1.0 + character.Luck / 500.0);
+            weight *= (1.0 + character.Luck / 500.0);
 
-            // When preferring higher rarity, boost trigger chances based on rarity
+            // When preferring higher rarity, boost weights based on rarity
             if (preferHigherRarity)
             {
                 double rarityBoost = ev.Rarity switch
@@ -82,16 +77,42 @@ public class RandomEventService : IRandomEventService
                     Rarity.Legendary => 3.0,
                     _ => 1.0
                 };
-                triggerChance *= rarityBoost;
+                weight *= rarityBoost;
             }
 
-            if (_random.RollChance(triggerChance))
+            // When doubleNonCommonRate is true, double the weight for non-common events
+            if (doubleNonCommonRate)
+            {
+                double rarityMultiplier = ev.Rarity switch
+                {
+                    Rarity.Common => 1.0,
+                    _ => 2.0  // Double rate for Uncommon, Rare, Epic, Legendary
+                };
+                weight *= rarityMultiplier;
+            }
+
+            weightedEvents.Add((ev, weight));
+        }
+
+        if (!weightedEvents.Any())
+            return null;
+
+        // Select one event based on weighted random selection
+        double totalWeight = weightedEvents.Sum(e => e.weight);
+        double roll = _random.NextDouble() * totalWeight;
+        double cumulative = 0;
+
+        foreach (var (ev, weight) in weightedEvents)
+        {
+            cumulative += weight;
+            if (roll < cumulative)
             {
                 var fullEvent = await _unitOfWork.RandomEvents.GetWithChoicesAsync(ev.Id);
                 if (fullEvent != null)
                 {
                     return MapToEventDto(fullEvent, character);
                 }
+                break;
             }
         }
 
@@ -322,7 +343,35 @@ public class RandomEventService : IRandomEventService
                 !MeetsStatRequirements(character, c.StatRequirements),
                 c.CheckStat,
                 c.CheckDifficulty,
-                GetStatRequirementHint(c.StatRequirements)
+                GetStatRequirementHint(c.StatRequirements),
+                new ChoiceRewardsDto(
+                    c.StrengthChange,
+                    c.AgilityChange,
+                    c.IntelligenceChange,
+                    c.EnduranceChange,
+                    c.CharismaChange,
+                    c.LuckChange,
+                    c.EnergyChange,
+                    c.HealthChange,
+                    c.GoldChange,
+                    c.ReputationChange,
+                    c.ExperienceChange,
+                    c.GrantSkill?.Name
+                ),
+                c.CheckStat.HasValue ? new ChoiceRewardsDto(
+                    c.FailureStrengthChange,
+                    c.FailureAgilityChange,
+                    c.FailureIntelligenceChange,
+                    c.FailureEnduranceChange,
+                    c.FailureCharismaChange,
+                    c.FailureLuckChange,
+                    c.FailureEnergyChange,
+                    c.FailureHealthChange,
+                    c.FailureGoldChange,
+                    c.FailureReputationChange,
+                    0,
+                    c.FailureGrantSkill?.Name
+                ) : null
             ))
             .ToList();
 

@@ -69,7 +69,8 @@ public interface IRandomEventService
         int characterId,
         ActionType action,
         IEnumerable<int> equippedStorybookIds,
-        bool preferHigherRarity = false);
+        bool preferHigherRarity = false,
+        bool doubleNonCommonRate = false);
 
     Task<EventChoiceResultDto> ProcessChoiceAsync(
         int characterId,
