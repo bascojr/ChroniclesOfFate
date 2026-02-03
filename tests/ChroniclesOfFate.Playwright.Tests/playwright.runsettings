@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <Playwright>
+    <BrowserName>chromium</BrowserName>
+    <LaunchOptions>
+      <Headless>true</Headless>
+      <SlowMo>0</SlowMo>
+    </LaunchOptions>
+    <ExpectTimeout>30000</ExpectTimeout>
+  </Playwright>
+  <NUnit>
+    <NumberOfTestWorkers>1</NumberOfTestWorkers>
+  </NUnit>
+  <RunConfiguration>
+    <EnvironmentVariables>
+      <PLAYWRIGHT_BROWSERS_PATH>0</PLAYWRIGHT_BROWSERS_PATH>
+    </EnvironmentVariables>
+  </RunConfiguration>
+</RunSettings>
